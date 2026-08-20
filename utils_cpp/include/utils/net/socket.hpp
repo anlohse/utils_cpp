@@ -38,7 +38,7 @@ public:
 
 	socket& operator = (socket& other) {
 		if (_M_data->rem_ref() <= 0) {
-			allocator.destroy(_M_data);
+			data_alloc_traits::destroy(allocator, _M_data);
 			allocator.deallocate(_M_data,1);
 		}
 		allocator = other.allocator;

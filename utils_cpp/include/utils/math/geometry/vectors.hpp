@@ -10,7 +10,6 @@
 
 #include <utils/math/math.hpp>
 #include <utils/funcs.hpp>
-#include <utils/containers/iterators.hpp>
 #include <type_traits>
 #include <cstdarg>
 
@@ -26,7 +25,12 @@ class vector {
 public:
 	typedef size_t size_type;
 	typedef _Float float_type;
-	typedef iterators::pointer_iterator<_Float> iterator;
+	// A raw pointer is a conforming random-access iterator, and is what
+	// std::array exposes. Note this drops the bounds checking the old
+	// containers::iterators::pointer_iterator performed on ++ and *, matching
+	// standard-container behaviour: use at() where a check is wanted.
+	typedef _Float* iterator;
+	typedef const _Float* const_iterator;
 private:
 	template <typename _Float_b, size_t _Rows, size_t _Cols>
 	friend class matrix;
@@ -212,11 +216,23 @@ public:
 	}
 
 	iterator begin() {
-		return iterator(_M_v,_M_v,_M_v+_Vec_size);
+		return _M_v;
+	}
+	const_iterator begin() const {
+		return _M_v;
+	}
+	const_iterator cbegin() const {
+		return _M_v;
 	}
 
+	const_iterator end() const {
+		return _M_v+_Vec_size;
+	}
+	const_iterator cend() const {
+		return _M_v+_Vec_size;
+	}
 	iterator end() {
-		return iterator(_M_v+_Vec_size,_M_v,_M_v+_Vec_size);
+		return _M_v+_Vec_size;
 	}
 
 	vector plus() const {

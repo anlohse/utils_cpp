@@ -1,0 +1,13 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+# utils_cpp uses std::thread / std::mutex, which need a threads implementation
+# on POSIX platforms.
+if(NOT WIN32)
+    find_dependency(Threads)
+endif()
+
+include("${CMAKE_CURRENT_LIST_DIR}/utils_cppTargets.cmake")
+
+check_required_components(utils_cpp)

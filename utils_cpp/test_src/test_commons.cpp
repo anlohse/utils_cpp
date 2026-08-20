@@ -5,14 +5,14 @@
  *      Author: alan.lohse
  */
 
-#include <utils/containers/vector.hpp>
 #include <utils/time.hpp>
 #include <utils/test/test_tools.hpp>
 #include <utils/math/giantint.hpp>
 #include <utils/math/decimal.hpp>
 #include <utils/math/transforms/fft.hpp>
 #include <utils/math/statictics.hpp>
-#include <utils/random/basic_random.hpp>
+#include <cstdint>
+#include <random>
 #include <utils/conversion.hpp>
 #include <iostream>
 #include <string>
@@ -35,7 +35,7 @@ public:
 	virtual void close_test() { }
 
 	void test_random() {
-		random::linear_congruential_engine<t_dword,76543,34567,0x7fffffff> rnd;
+		std::linear_congruential_engine<std::uint_fast32_t,76543,34567,0x7fffffff> rnd;
 		t_double sum = 0;
 		t_double mid = 0;
 		t_double desv = 0;
@@ -194,7 +194,7 @@ public:
 		ASSERT2(p / q, pdq);
 		ASSERT2(p % q, prq);
 		giantint r("21987654321987654321987654321987654321");
-		giantint s(123456l);
+		giantint s(123456);
 		giantint rds("178101139855395074536577034101118");
 		giantint rrs("30513");
 		ASSERT2(r / s, rds);
@@ -282,7 +282,7 @@ public:
 
 	void test_constructors() {
 		decimal d1(1.0);
-		decimal a1(12345678l,3);
+		decimal a1(12345678,3);
 		decimal f1(0.01);
 		decimal c1(99999174LL,6);
 		ASSERT2(d1, d);
@@ -367,7 +367,11 @@ public:
 		}
 		cout << "AVG error: " << error.mean() << endl;
 		cout << "Std Deviation error: " << error.standard_deviation() << endl;
-		ASSERT2(fft.size(), 2048);
+		// data is 256 complex samples and the transform is built over all of
+		// them, so size() is 256. The old expectation of 2048 was left over
+		// from an earlier version of this test that ran a FastFourierTransform
+		// over 512 doubles.
+		ASSERT2(fft.size(), 256u);
 	}
 
 };

@@ -1,0 +1,102 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": { "major": 3, "minor": 20, "patch": 0 },
+
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "UTILS_BUILD_TESTS": "ON"
+      }
+    },
+
+    {
+      "name": "msvc",
+      "displayName": "MSVC x64 (Visual Studio)",
+      "inherits": "base",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64",
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+    },
+    {
+      "name": "msvc-strict",
+      "displayName": "MSVC x64, warnings as errors",
+      "inherits": "msvc",
+      "cacheVariables": { "UTILS_WERROR": "ON" }
+    },
+    {
+      "name": "msvc-asan",
+      "displayName": "MSVC x64 + AddressSanitizer",
+      "inherits": "msvc",
+      "cacheVariables": { "UTILS_SANITIZE": "ON" }
+    },
+
+    {
+      "name": "mingw",
+      "displayName": "MinGW-w64 (GCC)",
+      "inherits": "base",
+      "generator": "MinGW Makefiles",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_COMPILER": "g++"
+      },
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+    },
+    {
+      "name": "mingw-strict",
+      "displayName": "MinGW-w64, warnings as errors",
+      "inherits": "mingw",
+      "cacheVariables": { "UTILS_WERROR": "ON" }
+    },
+
+    {
+      "name": "linux",
+      "displayName": "Linux GCC (core + xml, no UI)",
+      "inherits": "base",
+      "generator": "Unix Makefiles",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "UTILS_BUILD_UI": "OFF"
+      },
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux" }
+    },
+    {
+      "name": "linux-asan",
+      "displayName": "Linux GCC + ASan/UBSan",
+      "inherits": "linux",
+      "cacheVariables": { "UTILS_SANITIZE": "ON" }
+    }
+  ],
+
+  "buildPresets": [
+    { "name": "msvc",        "configurePreset": "msvc",        "configuration": "Debug" },
+    { "name": "msvc-release", "configurePreset": "msvc",       "configuration": "Release" },
+    { "name": "msvc-strict", "configurePreset": "msvc-strict", "configuration": "Debug" },
+    { "name": "msvc-asan",   "configurePreset": "msvc-asan",   "configuration": "Debug" },
+    { "name": "mingw",       "configurePreset": "mingw" },
+    { "name": "mingw-strict", "configurePreset": "mingw-strict" },
+    { "name": "linux",       "configurePreset": "linux" },
+    { "name": "linux-asan",  "configurePreset": "linux-asan" }
+  ],
+
+  "testPresets": [
+    {
+      "name": "msvc",
+      "configurePreset": "msvc",
+      "configuration": "Debug",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "mingw",
+      "configurePreset": "mingw",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "linux",
+      "configurePreset": "linux",
+      "output": { "outputOnFailure": true }
+    }
+  ]
+}

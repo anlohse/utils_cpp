@@ -8,131 +8,88 @@
 #ifndef TYPEUTILS_HPP_
 #define TYPEUTILS_HPP_
 
-#include <utils/funcs.hpp>
-#include <typeinfo>
 #include <cstdlib>
 #include <string>
+#include <typeinfo>
+
+#if defined(__GNUC__) || defined(__clang__)
+#  include <cxxabi.h>
+#  define UTILS_HAS_CXA_DEMANGLE 1
+#endif
 
 namespace utils {
 
+/**
+ * Helpers for inspecting types at runtime.
+ *
+ * The Itanium ABI name mangling is decoded by abi::__cxa_demangle rather than
+ * by hand. The previous hand-rolled parser wrote into fixed 13- and 128-byte
+ * stack buffers using lengths taken straight from the mangled string with no
+ * clamping, so any sufficiently long or deeply nested type name overflowed the
+ * stack. MSVC needs no demangling: typeid().name() is already readable there.
+ */
 class typeutils {
-private:
-static std::string parse_name_GNU(const char** src) {
-	std::string r;
-	bool once = true;
-	do {
-		bool hasNS = false;
-		int ptt = 0;
-		bool isStd = false;
-		if (!once) r += ", ";
-		while (**src == 'P' || **src == 'N' || **src == 'S' || **src == 'K' || **src == 't') {
-			switch(**src) {
-			case 'N':
-				hasNS = true;
-			break;
-			case 'S': if (!hasNS) {
-				if (strncmp((*src),"S_",2)==0) {
-				} else if (strncmp((*src),"S1_",3)==0) {
-					(*src)++;
-				} else if (strncmp((*src),"S2_",3)==0) {
-					r+="const ";
-					(*src)++;
-				} else {
-					isStd = true;
-					r+="std::";
-				}
-			}
-			break;
-			case 'P': ptt++; break;
-			case 'K': r+="const "; break;
-			}
-			(*src)++;
-		}
-		if (**src >= '0' && **src <= '9') {
-			bool first = true;
-			do {
-				if (!first) r += "::";
-				int sn = 0;
-				for (const char* xx = *src; *xx >= '0' && *xx <= '9'; xx++) { sn++; }
-				char tmp2[13] = "\0";
-				strncpy(tmp2,*src,sn);
-				int sz = atoi(tmp2);
-				char temp[128];
-				memset(temp,0,128);
-				strncpy(temp,(*src)+sn,sz);
-				(*src) += sn+sz;
-				r += temp;
-				first = false;
-				if (**src == 'I') {
-					(*src)++;
-					r+='<';
-					r+=parse_name_GNU(src);
-					r+='>';
-					if (**src != 0)(*src)++;
-				}
-			} while (**src >= '0' && **src <= '9' && **src != 0);
-		} else {
-			if (!isStd) {
-				switch(**src) {
-					case 'i': r+="int"; break;
-					case 'c': r+="char"; break;
-					case 'l': r+="long"; break;
-					case 's': r+="short"; break;
-					case 'x': r+="long long"; break;
-					case 'm': r+="unsigned long"; break;
-					case 'j': r+="unsigned int"; break;
-					case 't': r+="unsigned short"; break;
-					case 'h': r+="unsigned char"; break;
-					case 'y': r+="unsigned long long"; break;
-					case '_': r+="char*"; break;
-				}
-			} else {
-				switch(**src) {
-				case 's': r+="string"; break;
-				case 'a': r+="allocator"; break;
-				}
-			}
-			(*src)++;
-			if (**src == 'I') {
-				(*src)++;
-				r+='<';
-				r+=parse_name_GNU(src);
-				r+='>';
-				if (**src != 0)(*src)++;
-			}
-		}
-		while (ptt--) r += '*';
-		once = false;
-	} while (**src != 'E' && **src != 0);
-	if (**src=='E')
-		(*src)++;
-	return r;
-}
 public:
-template<typename A>
-static std::string type_name(A* a) {
-	const char* src = typeid(*a).name();
-#ifdef __GNUC__
-	return parse_name_GNU(&src);
-#else
-	return src;
+
+	/** Decodes a mangled type name, returning it unchanged if undecodable. */
+	static std::string demangle(const char* mangled) {
+		if (mangled == nullptr)
+			return std::string();
+#ifdef UTILS_HAS_CXA_DEMANGLE
+		int status = 0;
+		char* decoded = abi::__cxa_demangle(mangled, nullptr, nullptr, &status);
+		if (decoded != nullptr) {
+			std::string result(status == 0 ? decoded : mangled);
+			// __cxa_demangle allocates with malloc, so it must be freed, not deleted.
+			std::free(decoded);
+			return result;
+		}
 #endif
-}
+		return std::string(mangled);
+	}
 
-template<class A>
-static std::string type_name(A& a) {
-	return type_name(&a);
-}
+	/**
+	 * @return the name of the most-derived type of *a, or "nullptr" when a is null.
+	 *
+	 * For a polymorphic A this is the dynamic type; otherwise it is the static
+	 * type, exactly as typeid dictates.
+	 */
+	template<typename A>
+	static std::string type_name(const A* a) {
+		if (a == nullptr)
+			return std::string("nullptr");
+		return demangle(typeid(*a).name());
+	}
 
-template<class A, class B>
-static bool is_instance_of(B* a) {
-	return dynamic_cast<A*> (a) != NULL;
-}
+	/** @return the name of the most-derived type of a. */
+	template<typename A>
+	static std::string type_name(const A& a) {
+		return demangle(typeid(a).name());
+	}
 
-template<class A, class B>
-static bool is_instance_of(B& a) {
-	return dynamic_cast<A> (a) != NULL;
-}
+	/** @return the name of the static type A. */
+	template<typename A>
+	static std::string type_name() {
+		return demangle(typeid(A).name());
+	}
+
+	/** @return true when a points to an A. False for a null pointer. */
+	template<class A, class B>
+	static bool is_instance_of(const B* a) {
+		return dynamic_cast<const A*>(a) != nullptr;
+	}
+
+	/**
+	 * @return true when a refers to an A.
+	 *
+	 * Takes the address rather than casting the reference: dynamic_cast to a
+	 * reference type throws std::bad_cast on failure instead of yielding null,
+	 * so the old `dynamic_cast<A>(a) != NULL` form could not work.
+	 */
+	template<class A, class B>
+	static bool is_instance_of(const B& a) {
+		return dynamic_cast<const A*>(&a) != nullptr;
+	}
 
 };
 

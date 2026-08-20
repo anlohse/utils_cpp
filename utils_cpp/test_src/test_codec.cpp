@@ -38,7 +38,9 @@ public:
 		memset(dest,0,128);
 		enc.encode((const unsigned char*)value,strlen(value),dest,128);
 		ASSERT3(strcmp(dest,"303132333435363738393b")==0);
-		value = "+_)(*&¨%$#@!^LKJGH";
+		// "\xA8" written as an escape keeps this file pure ASCII while holding
+		// the byte exactly; the expected hex below asserts ...2a26 a8 2524...
+		value = "+_)(*&\xA8%$#@!^LKJGH";
 		memset(dest,0,128);
 		enc.encode((const unsigned char*)value,strlen(value),dest,128);
 		ASSERT3(strcmp(dest,"2b5f29282a26a825242340215e4c4b4a4748")==0);
@@ -54,7 +56,7 @@ public:
 		value = "2b5f29282a26a825242340215e4c4b4a4748";
 		memset(dest,0,128);
 		enc.decode(value,strlen(value),(unsigned char*)dest,128);
-		ASSERT3(strcmp(dest,"+_)(*&¨%$#@!^LKJGH")==0);
+		ASSERT3(strcmp(dest,"+_)(*&\xA8%$#@!^LKJGH")==0);
 	}
 
 };

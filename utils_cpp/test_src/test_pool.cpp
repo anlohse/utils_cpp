@@ -13,7 +13,8 @@
 // Description : Hello World in C++, Ansi-style
 //============================================================================
 
-#include <utils/random/basic_random.hpp>
+#include <cstdint>
+#include <random>
 #include <utils/time.hpp>
 #include <utils/memory/memory_pool.hpp>
 // #include <ext/pool_allocator.h>
@@ -60,7 +61,7 @@ struct pool_malloc {
 struct gnu_pool_malloc {
 	__gnu_cxx::__pool_alloc<char> pool;
 	void* malloc(size_t size) {
-		return pool.allocate(size,NULL);
+		return pool.allocate(size);
 	}
 	void free(void* mem, size_t size) {
 		pool.deallocate((char*)mem,size);
@@ -76,7 +77,7 @@ struct gnu_pool_malloc {
 struct std_allocator_malloc {
 	std::allocator<char> pool;
 	void* malloc(size_t size) {
-		return pool.allocate(size,NULL);
+		return pool.allocate(size);
 	}
 	void free(void* mem, size_t size) {
 		pool.deallocate((char*)mem,size);
@@ -97,12 +98,12 @@ struct data_t {
 	size_t size;
 };
 
-typedef random::linear_congruential_engine<t_dword,34567,76543,0x7fffffff> random_type;
+typedef std::linear_congruential_engine<std::uint_fast32_t,34567,76543,0x7fffffff> random_type;
 
 template <typename _Malloc>
 void test_malloc() {
 	_Malloc mallocfn;
-	random_type rnd((size_t)Time::nanoseconds());
+	random_type rnd(static_cast<random_type::result_type>(Time::nanoseconds()));
 	data_t* testdata = (data_t*)mallocfn.malloc(COUNT*sizeof(data_t));
 
 	cout << "Testing " << mallocfn.get_name() << endl;

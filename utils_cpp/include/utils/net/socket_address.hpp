@@ -10,6 +10,7 @@
 
 #include <utils/utils_defs.hpp>
 #include <cstring>
+#include <string>
 
 namespace utils {
 
@@ -19,16 +20,25 @@ namespace __socket_impl {
 class socket_base;
 }  // namespace __socket_impl
 
+/**
+ * Size of the opaque sockaddr storage, large enough for sockaddr_in6.
+ *
+ * A constant rather than a #define: ADDRSIZE was previously a macro leaking
+ * into every translation unit that included this header.
+ */
+inline constexpr size_t ADDRSIZE = 32;
+
 class socket_address {
 protected:
 	friend class __socket_impl::socket_base;
-#define ADDRSIZE 32
 	char buff[ADDRSIZE];
 	socket_address() {
 		::memset(buff,0,ADDRSIZE);
 	}
 public:
-	socket_address(const std::string& hostname, u_short port);
+	// t_word (uint16_t), not the BSD alias u_short: a port is 16 bits by
+	// definition, and u_short is not portable.
+	socket_address(const std::string& hostname, t_word port);
 	~socket_address() {
 	}
 
@@ -40,7 +50,7 @@ public:
 
 	std::string get_ip_address() const;
 
-	u_short get_port() const;
+	t_word get_port() const;
 };
 
 }

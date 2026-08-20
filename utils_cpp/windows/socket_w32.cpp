@@ -86,7 +86,7 @@ void socket_base::create_socket(socket_domain domain, socket_type type, socket_p
     if (fd < 0)
     	throw socket_exception(WSAGetLastError());
 	_M_data = allocator.allocate(1);
-	allocator.construct(_M_data,socket_data());
+	socket_base::data_alloc_traits::construct(allocator, _M_data, socket_data());
 	_M_data->_M_fd = fd;
 	_M_data->_M_domain = domain;
 	_M_data->_M_type = type;
@@ -98,7 +98,7 @@ socket_base::socket_data* socket_base::_accept() {
 	if ((SOCKET)acc_fd == INVALID_SOCKET)
 		throw socket_exception(WSAGetLastError());
 	socket_data* sock_data = allocator.allocate(1);
-	allocator.construct(sock_data,socket_data());
+	socket_base::data_alloc_traits::construct(allocator, sock_data, socket_data());
 	sock_data->_M_fd = acc_fd;
 	sock_data->_M_domain = _M_data->_M_domain;
 	sock_data->_M_type = _M_data->_M_type;
@@ -140,8 +140,8 @@ socket_iostream socket_base::get_iostream() {
 	if (_M_data->_M_type != STREAM)
            throw socket_exception("Socket is not of stream type.");
 	DEFAULT_ALLOCATOR<sock_streambuf> _stb_alloc;
-	sock_streambuf* stbf = _stb_alloc.allocate(1,NULL);
-	_stb_alloc.construct(stbf, sock_streambuf(_M_data->_M_fd, _M_data->_M_timeout));
+	sock_streambuf* stbf = _stb_alloc.allocate(1);
+	std::allocator_traits<DEFAULT_ALLOCATOR<sock_streambuf> >::construct(_stb_alloc, stbf, sock_streambuf(_M_data->_M_fd, _M_data->_M_timeout));
 	socket_iostream str = socket_iostream(stbf,_stb_alloc);
 	return str;
 }

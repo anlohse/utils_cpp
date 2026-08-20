@@ -12,50 +12,47 @@
 #include <cstdlib>
 #include <cstring>
 #include <cstdio>
+#include <cstddef>
+#include <cstdint>
 #include <cwchar>
-#include <stddef.h>
-#include <stdint.h>
 
-typedef signed char			t_small;
-typedef unsigned char		t_byte;
-typedef short				t_short;
-typedef long int			t_int;
+// The width-named types below are exactly that: fixed width on every platform.
+//
+// They used to be spelled with the built-in types, which made them lie. `t_int`
+// and `t_dword` were `long int` / `unsigned long int` -- 32 bits on Windows but
+// 64 on LP64 Linux -- so anything storing a 32-bit quantity in a t_dword (the
+// giantint limb array, the packed ARGB in ui::Color) silently changed shape
+// across platforms. Two further typedefs were guarded by `#ifdef __int64` and
+// `#ifdef wchar_t`, which test keywords rather than macros and are therefore
+// always false; t_wchar consequently resolved to `unsigned short` even where
+// wchar_t is 32 bits wide.
+typedef std::int8_t			t_small;
+typedef std::uint8_t		t_byte;
+typedef std::int16_t		t_short;
+typedef std::int32_t		t_int;
 
-typedef unsigned short		t_word;
-typedef unsigned long int	t_dword;
-typedef unsigned int		t_uint;
+typedef std::uint16_t		t_word;
+typedef std::uint32_t		t_dword;
+typedef std::uint32_t		t_uint;
 
-typedef unsigned short		u_short;
-typedef unsigned long 		u_long;
-
-#ifdef __int64
-typedef __int64				t_bigint;
-typedef unsigned __int64	t_qword;
-#else
-typedef long long int		t_bigint;
-typedef unsigned long long int t_qword;
-#endif
+typedef std::int64_t		t_bigint;
+typedef std::uint64_t		t_qword;
 
 typedef float				t_float;
 typedef double 				t_double;
 
 typedef void*				t_pointer;
 
-#ifdef wchar_t
 typedef wchar_t				t_wchar;
-#else
-typedef unsigned short		t_wchar;
-#endif
-
 typedef char				t_char;
 
-typedef size_t				t_size;
+typedef std::size_t			t_size;
 
 // VALUES FOR t_result
 #define R_OK 0
 #define R_ERROR_UNKNOWN -1
 
-typedef long int			t_result;
+typedef std::int32_t		t_result;
 
 // allocator configurations
 #include <memory>

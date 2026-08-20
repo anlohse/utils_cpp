@@ -12,7 +12,8 @@
 #include <utils/funcs.hpp>
 #include <utils/math/math.hpp>
 #include <utils/math/statictics.hpp>
-#include <utils/containers/dynarray.hpp>
+#include <memory>
+#include <vector>
 #include <vector>
 
 namespace utils {
@@ -121,7 +122,7 @@ public:
 	typedef size_t size_type;
 	typedef _Alloc allocator_type;
 	typedef _TransferFunc transfer_function_type;
-	typedef utils::containers::dynarray<float_type,allocator_type> weights_type;
+	typedef std::vector<float_type,allocator_type> weights_type;
 	typedef typename weights_type::iterator weight_iterator;
 	typedef typename weights_type::const_iterator const_weight_iterator;
 	typedef _TrainingData training_data_type;
@@ -204,9 +205,10 @@ public:
 	typedef _Float float_type;
 	typedef size_t size_type;
 	typedef _Alloc allocator_type;
-	typedef typename _Alloc::template rebind<neuron_type>::other neuron_allocator_type;
+	// _Alloc::rebind was removed from std::allocator in C++20.
+	typedef typename std::allocator_traits<_Alloc>::template rebind_alloc<neuron_type> neuron_allocator_type;
 	typedef _TransferFunc transfer_function_type;
-	typedef utils::containers::dynarray<neuron_type,neuron_allocator_type> neuron_array_type;
+	typedef std::vector<neuron_type,neuron_allocator_type> neuron_array_type;
 	typedef typename neuron_array_type::iterator neuron_iterator;
 	typedef typename neuron_array_type::const_iterator const_neuron_iterator;
 	typedef _TrainingData training_data_type;

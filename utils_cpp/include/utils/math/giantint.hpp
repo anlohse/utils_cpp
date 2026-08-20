@@ -9,6 +9,7 @@
 #define GIANTINT_HPP_
 
 #include <utils/utils_defs.hpp>
+#include <algorithm>
 #include <utils/funcs.hpp>
 #include <utils/math/math_exception.hpp>
 #include <vector>
@@ -143,7 +144,7 @@ private:
 		return *this;
 	}
 	giantint& do_or(const giantint& other) {
-		t_size length = MIN(data.size(),other.data.size());
+		t_size length = std::min(data.size(), other.data.size());
 		for (t_size i = 0; i < length; i++) {
 			data[i] |= other.data[i];
 		}
@@ -173,7 +174,7 @@ private:
 	giantint do_add(const giantint& other) const {
 		giantint result;
 		t_dword carry = 0;
-		t_size length = MAX(data.size(),other.data.size());
+		t_size length = std::max(data.size(), other.data.size());
 		for (t_size i = 0; i < length; i++) {
 			t_dword a = i < data.size() ? data[i] : 0;
 			t_dword b = i < other.data.size() ? other.data[i] : 0;
@@ -189,7 +190,7 @@ private:
 	giantint difference(const giantint& other) const {
 		giantint result;
 		t_dword borrow = 0;
-		t_size length = MAX(data.size(),other.data.size());
+		t_size length = std::max(data.size(), other.data.size());
 		for (t_size i = 0; i < length; i++) {
 			t_dword a = i < data.size() ? data[i] : 0;
 			t_dword b = i < other.data.size() ? other.data[i] : 0;
@@ -260,7 +261,7 @@ private:
 			quo._M_signal = _M_signal*divisor._M_signal;
 			return quo;
 		} else if (cmp == 0) {
-			giantint quo(1l);
+			giantint quo(1);
 			quo._M_signal = _M_signal*divisor._M_signal;
 			remainder.data.clear();
 			remainder._M_signal = 1;
@@ -473,10 +474,10 @@ public:
 	}
 
 	giantint sqrt() const {
-		giantint min(1l);
+		giantint min(1);
 		giantint max(*this);
 		giantint mid((max+min).single_div(2));
-		while (min != max && min != max-giantint(1l)) {
+		while (min != max && min != max-giantint(1)) {
 			giantint mid2 = mid*mid;
 			if (mid2 < *this)
 				min = mid;
@@ -490,7 +491,7 @@ public:
 
 	giantint pow(t_int p) const {
 		if (p==0)
-			return giantint(1l);
+			return giantint(1);
 		if (p<0)
 			return giantint();
 		giantint r = *this;
@@ -523,7 +524,7 @@ public:
 	bool equal_to(const giantint& other) const {
 		if (is_zero() && other.is_zero()) return true;
 		if (_M_signal != other._M_signal) return false;
-		t_size length = MIN(data.size(),other.data.size());
+		t_size length = std::min(data.size(), other.data.size());
 		for (t_size i = 0; i < length; i++) {
 			if (data[i] != other.data[i]) return false;
 		}
@@ -541,7 +542,7 @@ public:
 	}
 
 	t_int compare_to(const giantint& other) const {
-		int length = (int)(MIN(data.size(),other.data.size()));
+		int length = (int)(std::min(data.size(), other.data.size()));
 		if (data.size() > other.data.size()) {
 			for (int i = (int)data.size() -1; i >= length; i--) {
 				if (data[i] != 0) return _M_signal;
@@ -709,7 +710,7 @@ public:
 	}
 
 	giantint& operator ++() {
-		*this = *this + giantint(1l);
+		*this = *this + giantint(1);
 		return *this;
 	}
 
@@ -720,7 +721,7 @@ public:
 	}
 
 	giantint& operator --() {
-		*this = *this - giantint(1l);
+		*this = *this - giantint(1);
 		return *this;
 	}
 

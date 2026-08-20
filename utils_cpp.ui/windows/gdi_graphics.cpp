@@ -6,6 +6,7 @@
  */
 
 #include <utils/ui/ui.hpp>
+#include <algorithm>
 #include <utils/ui/image.hpp>
 #include "gdi_graphics.h"
 #include <windows.h>
@@ -453,7 +454,7 @@ GdiStroke::GdiStroke(HPEN _hpen) : hpen(_hpen), deletable(false) {
 	EXTLOGPEN elp;
 	if (GetObject(hpen, sizeof(LOGPEN), &lp)) {
 		style = lp.lopnStyle;
-		width = MAX(lp.lopnWidth.x,lp.lopnWidth.y);
+		width = std::max(lp.lopnWidth.x, lp.lopnWidth.y);
 	} else if (GetObject(hpen, sizeof(EXTLOGPEN), &elp)) {
 		style = elp.elpPenStyle;
 		width = elp.elpWidth;

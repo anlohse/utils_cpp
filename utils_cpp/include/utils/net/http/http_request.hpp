@@ -13,7 +13,8 @@
 #include <utils/net/socket.hpp>
 #include <string>
 #include <iostream>
-#include <utils/containers/hash_map.hpp>
+#include <unordered_map>
+#include <vector>
 
 namespace utils {
 
@@ -21,12 +22,13 @@ namespace net {
 
 namespace http {
 
-using containers::hashmap;
-
 struct http_request_data {
 	typedef std::vector<std::string, DEFAULT_ALLOCATOR<std::string> > string_list;
-	typedef hashmap<std::string, string_list, hash<const std::string&>, equal_to_nocase<const std::string&> > parameter_map;
-	typedef hashmap<std::string, std::string, hash<const std::string&>, equal_to_nocase<const std::string&> > headers_map;
+	// hash_nocase, not hash<const std::string&>: parameter and header lookup is
+	// case-insensitive, so the hash has to be too or differing-case keys never
+	// resolve to the same bucket.
+	typedef std::unordered_map<std::string, string_list, hash_nocase, equal_to_nocase<const std::string&> > parameter_map;
+	typedef std::unordered_map<std::string, std::string, hash_nocase, equal_to_nocase<const std::string&> > headers_map;
 
 	parameter_map _M_parameters;
 	headers_map _M_headers;

@@ -33,7 +33,7 @@ namespace net {
 //---------------------------------------------------------------------------------------------------------------------------
 // socket_address
 
-socket_address::socket_address(const std::string& hostname, u_short port) {
+socket_address::socket_address(const std::string& hostname, t_word port) {
     addrinfo hints, *result, *ptr = NULL, *found=NULL;
 	memset(&hints, 0, sizeof(hints));
 	hints.ai_flags = AI_CANONNAME;
@@ -94,7 +94,7 @@ std::string socket_address::get_ip_address() const {
 	return "";
 }
 
-u_short socket_address::get_port() const {
+t_word socket_address::get_port() const {
 	if (((sockaddr*)buff)->sa_family == AF_INET)
 		return htons(((sockaddr_in*)buff)->sin_port);
 	else
@@ -141,7 +141,7 @@ int sock_streambuf::overflow(int c) {
 }
 int	sock_streambuf::doallocate () {
 	if (!eback()) {
-		char* buf = _M_allocator.allocate(2 * SB_BUFF_SIZE, NULL);
+		char* buf = _M_allocator.allocate(2 * SB_BUFF_SIZE);
 		setg(buf, buf+SB_BUFF_SIZE, buf+SB_BUFF_SIZE);
 		buf += SB_BUFF_SIZE;
 		setp(buf, buf + SB_BUFF_SIZE);

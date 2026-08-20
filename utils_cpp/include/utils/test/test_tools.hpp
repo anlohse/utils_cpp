@@ -10,38 +10,68 @@
 
 #include <utils/utils_defs.hpp>
 #include <utils/time.hpp>
-#include <utils/functions/bound_funcs.hpp>
-#include <vector>
-#include <iostream>
 #include <utils/exception.hpp>
-#include <string>
 #include <cstring>
+#include <functional>
+#include <iostream>
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace utils {
 
 namespace test {
 
+class TestCase;
+
+/**
+ * One registered test method.
+ *
+ * The callable is a std::function taking the owning TestCase. It replaces a
+ * hand-rolled bound_func hierarchy whose registration macro C-cast member
+ * function pointers between unrelated classes -- undefined behaviour, and
+ * outright broken on implementations where member pointer size varies with the
+ * class layout.
+ */
 struct test_function {
-	functions::bound_func* address;
+	std::function<void(TestCase*)> address;
 	const char* name;
 	const char* exception_message;
-	test_function(functions::bound_func* _address, const char* _name, const char* _exception_message) {
-		address = _address;
-		name = _name;
-		exception_message = _exception_message;
+	test_function(std::function<void(TestCase*)> _address, const char* _name, const char* _exception_message) :
+		address(std::move(_address)),
+		name(_name),
+		exception_message(_exception_message) {
 	}
 };
 
-#define ADD_TEST_FUNCTION(cl,fn) tests.push_back(utils::test::test_function(new utils::functions::bound_func_NP<void,cl>((utils::functions::bound_func_NP<void,cl>::func_type)&fn),(const char*)#fn,NULL));
-#define ADD_TEST_FUNCTION_EX(cl,fn,excp) tests.push_back(utils::test::test_function(new utils::functions::bound_func_NP<void,cl>((utils::functions::bound_func_NP<void,cl>::func_type)&fn),(const char*)#fn,(const char*)excp));
+/**
+ * Registers a member function as a test method.
+ * @param cl the TestCase subclass
+ * @param fn the qualified member function name, e.g. Test_Hex::test_encode
+ */
+// The static_cast to void (cl::*)() picks the no-argument overload where a
+// test class also declares a same-named helper taking parameters (Test_Base32
+// and Test_Base64 both do). It is a checked conversion between compatible
+// member pointer types, unlike the C-cast this replaces.
+#define ADD_TEST_FUNCTION(cl,fn) \
+	tests.push_back(utils::test::test_function( \
+		[](utils::test::TestCase* _self) { (static_cast<cl*>(_self)->*static_cast<void (cl::*)()>(&fn))(); }, \
+		#fn, nullptr))
+
+/** As ADD_TEST_FUNCTION, but the test passes only if it throws with `excp`. */
+#define ADD_TEST_FUNCTION_EX(cl,fn,excp) \
+	tests.push_back(utils::test::test_function( \
+		[](utils::test::TestCase* _self) { (static_cast<cl*>(_self)->*static_cast<void (cl::*)()>(&fn))(); }, \
+		#fn, (const char*)excp))
 
 class test_exception : public utils_exception {
 public:
-	test_exception() throw() :
+	test_exception() noexcept :
 		utils_exception()
 	{
 	}
-	test_exception(const std::string& cause) throw() :
+	test_exception(const std::string& cause) noexcept :
 		utils_exception(cause)
 	{
 	}
@@ -66,55 +96,55 @@ public:
 };
 
 struct test_case {
-	TestCase* tcase;
+	// shared_ptr rather than a raw pointer: test_case is copied into the
+	// registry by value, and the old raw pointer was never deleted.
+	std::shared_ptr<TestCase> tcase;
 	const char* name;
-	test_case(TestCase* _tcase, const char* _name) {
-		tcase = _tcase;
-		name = _name;
-	}
-	test_case(const test_case& other) {
-		tcase = other.tcase;
-		name = other.name;
+	test_case(std::shared_ptr<TestCase> _tcase, const char* _name) :
+		tcase(std::move(_tcase)),
+		name(_name) {
 	}
 };
 
-#define ADD_TEST_CASE(tc) utils::test::TestSuit::add_test(utils::test::test_case(new tc(),#tc));
+#define ADD_TEST_CASE(tc) \
+	utils::test::TestSuit::add_test(utils::test::test_case(std::make_shared<tc>(), #tc))
 
 class TestSuit {
 private:
 	static std::vector<test_case>& _tests() {
-		static std::vector<test_case>* tests;
-		if (tests == NULL) tests = new std::vector<test_case>();
-		return *tests;
+		// A function-local static, not a leaked heap vector. Initialisation is
+		// thread-safe and the registry is destroyed at exit.
+		static std::vector<test_case> tests;
+		return tests;
 	}
 public:
 	static void add_test(const test_case& tc) {
 		_tests().push_back(tc);
 	}
 
+	/** @return the number of failed test methods. */
 	static int run_tests() {
 		int total_failed = 0;
 		for (std::vector<test_case>::iterator it = _tests().begin(), end = _tests().end();
-				it != end; it++) {
+				it != end; ++it) {
 			std::cout << "Running test case " << it->name << std::endl;
 			int success_count = 0, failed_count = 0;
-			t_bigint start_all, end_all;
-			start_all = Time::milliseconds();
+			const t_bigint start_all = Time::milliseconds();
 			for (std::vector<test_function>::iterator it2 = it->tcase->tests.begin(), end2 = it->tcase->tests.end();
-					it2 != end2; it2++) {
+					it2 != end2; ++it2) {
 				std::cout << "Test method: " << it2->name << " ... ";
-				long start, finish;
 				it->tcase->prepare_test();
-				bool success = it2->exception_message == NULL;
+				bool success = it2->exception_message == nullptr;
 				std::string message = "ok";
-				start = Time::nanoseconds();
+				// t_bigint, not long: Time::nanoseconds() overflows a 32-bit long.
+				const t_bigint start = Time::nanoseconds();
 				try {
-					it2->address->call(NULL,it->tcase,NULL);
+					it2->address(it->tcase.get());
 				} catch(std::exception& exc) {
-					success = it2->exception_message != NULL && strcmp(it2->exception_message,exc.what()) == 0;
+					success = it2->exception_message != nullptr && strcmp(it2->exception_message,exc.what()) == 0;
 					message = exc.what();
 				}
-				finish = Time::nanoseconds();
+				const t_bigint finish = Time::nanoseconds();
 				it->tcase->close_test();
 				if (success) {
 					std::cout << "SUCCESS";
@@ -125,7 +155,7 @@ public:
 				}
 				std::cout << " in " << (finish-start) << " ns" << std::endl;
 			}
-			end_all = Time::milliseconds();
+			const t_bigint end_all = Time::milliseconds();
 			std::cout << "Tests done: " << it->tcase->tests.size() << " in " << (end_all - start_all) << " ms " << std::endl;
 			std::cout << "Successes: " << success_count << std::endl;
 			std::cout << "Failures: " << failed_count << std::endl;

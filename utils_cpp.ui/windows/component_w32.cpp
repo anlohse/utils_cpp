@@ -487,7 +487,9 @@ FillStyle* Component::getBackground() const {
 }
 
 void Component::setId(int id) {
-	setWindowPointer(internal_data.hWnd, GWLP_ID, (void*)id);
+	// Widen to pointer size explicitly; a bare (void*) cast from int is a
+	// narrowing-to-wider conversion the compiler rightly flags on 64-bit.
+	setWindowPointer(internal_data.hWnd, GWLP_ID, reinterpret_cast<void*>(static_cast<ptrdiff_t>(id)));
 }
 int Component::getId() const {
 	return (int) reinterpret_cast<ptrdiff_t>(getWindowPointer(internal_data.hWnd, GWLP_ID));

@@ -11,18 +11,31 @@
 #include <cstdio>
 #include <cstdlib>
 
+// These may already have been supplied by the build system, which is the
+// preferred source of truth; the #ifndef guards keep an -D on the command line
+// from colliding with the fallback detection below.
 #if defined(_WIN32) || defined(__WIN32) || defined(_WIN32_)
-#  define UTILS_WINDOWS
+#  ifndef UTILS_WINDOWS
+#    define UTILS_WINDOWS
+#  endif
 #  if defined(USE_PTHREAD)
-#    define PTHREAD_IMPL
+#    ifndef PTHREAD_IMPL
+#      define PTHREAD_IMPL
+#    endif
 #  else
-#    define WINDOWS_THREAD_IMPL
+#    ifndef WINDOWS_THREAD_IMPL
+#      define WINDOWS_THREAD_IMPL
+#    endif
 #  endif
 #endif
 
 #if defined(_LINUX) || defined(__LINUX) || defined(_LINUX_)
-# define UTILS_LINUX
-# define PTHREAD_IMPL
+#  ifndef UTILS_LINUX
+#    define UTILS_LINUX
+#  endif
+#  ifndef PTHREAD_IMPL
+#    define PTHREAD_IMPL
+#  endif
 #include "linux.inc"
 #endif
 

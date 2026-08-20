@@ -102,7 +102,12 @@ protected:
 		}
 	};
 
-	DEFAULT_ALLOCATOR<socket_data> allocator;
+	typedef DEFAULT_ALLOCATOR<socket_data> data_allocator_type;
+	// allocator::construct/destroy were removed in C++20; go through
+	// allocator_traits, which works for every conforming allocator.
+	typedef std::allocator_traits<data_allocator_type> data_alloc_traits;
+
+	data_allocator_type allocator;
 	socket_data* _M_data;
 
 private:
@@ -128,7 +133,7 @@ protected:
 
 	socket_base& operator = (const socket_base& other) {
 		if (_M_data->rem_ref() <= 0) {
-			allocator.destroy(_M_data);
+			data_alloc_traits::destroy(allocator, _M_data);
 			allocator.deallocate(_M_data,1);
 		}
 		allocator = other.allocator;
@@ -155,7 +160,7 @@ public:
 	virtual ~socket_base() {
 		if (_M_data->rem_ref() <= 0) {
 			close();
-			allocator.destroy(_M_data);
+			data_alloc_traits::destroy(allocator, _M_data);
 			allocator.deallocate(_M_data,1);
 		}
 	}

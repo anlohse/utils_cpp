@@ -80,9 +80,13 @@ public:
 	DiscreteFourierTransform(_Iterator x, _Iterator end) : alloc(), m_coeffs(NULL), m_length(0) {
 		check_type();
 		if (end==x) {
-			DiscreteFourierTransform();
-		} else if ((end - x) % 2 == 1) {
-			throw math_exception("Input must be pairs of real and imaginary numbers.");
+			// This used to read `DiscreteFourierTransform();`, which builds and
+			// discards a temporary rather than initialising this object, so an
+			// empty range left m_coeffs null instead of the single zero
+			// coefficient the default constructor produces.
+			m_coeffs = alloc.allocate(1);
+			m_coeffs[0] = complex_type(0,0);
+			m_length = 1;
 		} else {
 			do_dft(x,end);
 		}

@@ -30,7 +30,7 @@ struct container_child {
 
 class Container : public Component {
 public:
-	typedef containers::fwdlist<container_child, ui_allocator<container_child> > component_list;
+	typedef std::list<container_child, ui_allocator<container_child> > component_list;
 	typedef component_list::const_iterator component_iterator;
 private:
 	friend class ContainerUIController;
@@ -48,7 +48,11 @@ public:
 	virtual void addChild(Component* child);
 	virtual bool addChild(Component* child, int constraint);
 	virtual void removeChild(Component* child);
+	// children() alone cannot be iterated safely -- there was no way to know
+	// where the sequence ends. The old fwdlist iterator converted to bool,
+	// which standard iterators do not.
 	virtual component_iterator children() const;
+	virtual component_iterator children_end() const;
 
 	virtual void setLayout(Layout* layout);
 	virtual Layout* getLayout() const;

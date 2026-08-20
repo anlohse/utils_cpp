@@ -11,6 +11,9 @@
 #include <utils/utils_defs.hpp>
 #include <utils/funcs.hpp>
 #include <utils/math/math.hpp>
+#include <atomic>
+#include <ostream>
+#include <string>
 
 namespace utils {
 namespace ui {
@@ -347,23 +350,35 @@ struct TextMetrics {
  */
 class UIObject {
 private:
-	volatile int _M_references;
+	// std::atomic, not volatile int: volatile provides no atomicity, so the
+	// ++/-- below were a data race whenever a UI object was referenced from
+	// more than one thread. volatile has never meant "thread-safe" in C++.
+	std::atomic<int> _M_references;
 public:
-	UIObject() : _M_references() { }
+	UIObject() : _M_references(0) { }
 	virtual ~UIObject() { }
 
+	// std::atomic is not copyable, but UIObject still needs to be. A copy is a
+	// distinct object, so it starts with its own zero reference count rather
+	// than inheriting the source's -- copying the count would over-retain the
+	// new object and leak it.
+	UIObject(const UIObject&) : _M_references(0) { }
+	UIObject& operator = (const UIObject&) { return *this; }
+
 	UIObject* add_reference() {
-		_M_references++;
+		_M_references.fetch_add(1, std::memory_order_relaxed);
 		return this;
 	}
 
 	UIObject* rem_reference() {
-		_M_references--;
+		// acq_rel so that the decrement that reaches zero happens-after every
+		// other thread's use of the object.
+		_M_references.fetch_sub(1, std::memory_order_acq_rel);
 		return this;
 	}
 
-	int get_references() {
-		return _M_references;
+	int get_references() const {
+		return _M_references.load(std::memory_order_acquire);
 	}
 
 	static void* operator new(size_t nbytes);

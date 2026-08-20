@@ -6,8 +6,9 @@
  */
 
 #include <utils/log/appender.hpp>
-#include <utils/thread/thread.hpp>
 #include <ctime>
+#include <sstream>
+#include <thread>
 
 namespace utils {
 
@@ -57,10 +58,12 @@ void pattern_layout::do_layout(appender* appnd, const char* _file,  int _line, c
 				appnd->append(level,buf);
 			} break;
 			case 't': {
-				int tid = thread::get_current_thread_id();
-				char nm[16];
-				ltoa(tid,nm,10);
-				appnd->append(level,nm);
+				// std::thread::id is opaque and only guaranteed to be
+				// streamable, so format it rather than casting it to an int.
+				// This also drops ltoa(), which is not standard C.
+				std::ostringstream tid;
+				tid << std::this_thread::get_id();
+				appnd->append(level,tid.str().c_str());
 			} break;
 			}
 		} else {
