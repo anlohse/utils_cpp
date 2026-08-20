@@ -9,6 +9,7 @@
 #define DECIMAL_HPP_
 
 #include <utils/funcs.hpp>
+#include <algorithm>
 #include <utils/math/giantint.hpp>
 
 namespace utils {
@@ -30,8 +31,8 @@ private:
 
 	decimal do_add(const decimal& other) const {
 		int align1 = 0, align2 = 0;
-		giantint scalev1(1l);
-		giantint scalev2(1l);
+		giantint scalev1(1);
+		giantint scalev2(1);
 		align1 = other._M_scale - _M_scale;
 		align2 = _M_scale - other._M_scale;
 		while (align1-- > 0) scalev1.single_mul(10);
@@ -39,7 +40,7 @@ private:
 		giantint p1 = (*this)._M_int_value * scalev1;
 		giantint p2 = other._M_int_value * scalev2;
 		giantint int_result(p1+p2);
-		decimal result(int_result,MAX(_M_scale, other._M_scale));
+		decimal result(int_result,std::max(_M_scale, other._M_scale));
 		return result;
 	}
 	decimal do_mul(const decimal& other) const {
@@ -49,7 +50,7 @@ private:
 	}
 	decimal do_div(const decimal& other, t_short scale, ROUND_MODE mode) const {
 		giantint int_rem;
-		giantint scaledvd(1l);
+		giantint scaledvd(1);
 		int scale_add = other._M_int_value.digits()+1+(scale > 0 ? scale : 0);
 		if (_M_scale < 0) {
 			int scdvd = -_M_scale;
@@ -74,11 +75,11 @@ public:
 		return _zero;
 	}
 	static const decimal one(){
-		static const decimal _one(1l,0);
+		static const decimal _one(1,0);
 		return _one;
 	}
 	static const decimal ten() {
-		static const decimal _ten(10l,0);
+		static const decimal _ten(10,0);
 		return _ten;
 	}
 public:
@@ -192,8 +193,8 @@ public:
 			return _M_int_value == other._M_int_value;
 		else {
 			int align1 = 0, align2 = 0;
-			giantint scalev1(1l);
-			giantint scalev2(1l);
+			giantint scalev1(1);
+			giantint scalev2(1);
 			align1 = other._M_scale - _M_scale;
 			align2 = _M_scale - other._M_scale;
 			while (align1-- > 0) scalev1.single_mul(10);
@@ -209,8 +210,8 @@ public:
 			return _M_int_value.compare_to(other._M_int_value);
 		else {
 			int align1 = 0, align2 = 0;
-			giantint scalev1(1l);
-			giantint scalev2(1l);
+			giantint scalev1(1);
+			giantint scalev2(1);
 			align1 = other._M_scale - _M_scale;
 			align2 = _M_scale - other._M_scale;
 			while (align1-- > 0) scalev1.single_mul(10);
@@ -281,7 +282,7 @@ public:
 	}
 
 	decimal pow(t_int power) const {
-		decimal r = decimal(1l,0);
+		decimal r = decimal(1,0);
 		while (power-- > 0) {
 			r *= *this;
 		}

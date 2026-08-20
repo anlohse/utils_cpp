@@ -24,22 +24,39 @@ struct DefaultUIAllocator : public UIAllocator {
 	}
 };
 
-static UIAllocator* actual_ui_allocator = new DefaultUIAllocator();
+/**
+ * The installed allocator.
+ *
+ * This used to be a namespace-scope `UIAllocator* = new DefaultUIAllocator()`,
+ * which is dynamically initialised. UIObject::operator new reads it, and any
+ * UIObject constructed by another translation unit's static initialiser could
+ * therefore run before this pointer was assigned -- a static initialisation
+ * order fiasco that dereferenced null. Wrapping it in a function makes the
+ * default allocator a function-local static, initialised on first use.
+ */
+static UIAllocator*& current_allocator() {
+	static DefaultUIAllocator default_allocator;
+	static UIAllocator* allocator = &default_allocator;
+	return allocator;
+}
 
 UIAllocator* getUIAllocator() {
-	return actual_ui_allocator;
+	return current_allocator();
 }
 UIAllocator* setUIAllocator(UIAllocator* new_alloc) {
-	UIAllocator* old = actual_ui_allocator;
-	actual_ui_allocator = new_alloc;
+	UIAllocator*& slot = current_allocator();
+	UIAllocator* old = slot;
+	// Refuse null so the invariant "there is always an allocator" holds.
+	if (new_alloc != NULL)
+		slot = new_alloc;
 	return old;
 }
 
 void* UIObject::operator new(size_t nbytes) {
-	return actual_ui_allocator->malloc(nbytes);
+	return current_allocator()->malloc(nbytes);
 }
 void UIObject::operator delete(void* p, size_t nbytes) {
-	actual_ui_allocator->free(p,nbytes);
+	current_allocator()->free(p,nbytes);
 }
 
 }

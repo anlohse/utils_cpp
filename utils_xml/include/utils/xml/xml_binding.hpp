@@ -9,7 +9,6 @@
 #define UTILS_XML_XML_BINDING_HPP_
 
 #include <utils/xml/xml_parser.hpp>
-#include <utils/functions/bound_funcs.hpp>
 #include <utils/conversion.hpp>
 #include <vector>
 #include <string>

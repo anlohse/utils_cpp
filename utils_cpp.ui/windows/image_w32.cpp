@@ -235,8 +235,10 @@ Image* Image::loadImage(std::basic_istream<char>& input) {
 
 }
 
-Image* loadBitmap(std::basic_istream<char>& input) {
+/** Largest pixel buffer we are willing to allocate for one bitmap: 256 MiB. */
+static const unsigned long long MAX_BITMAP_BYTES = 256ull * 1024ull * 1024ull;
 
+Image* loadBitmap(std::basic_istream<char>& input) {
 
 	BITMAPFILEHEADER bmfHeader;
 
@@ -249,23 +251,62 @@ Image* loadBitmap(std::basic_istream<char>& input) {
 	if (!input.read((char*)&bih,sizeof(BITMAPINFOHEADER)))
 		return NULL;
 
-	int dwBmpSize = bih.biCompression == BI_RGB ? ((bih.biWidth * bih.biBitCount + 31) / 32) * 4 * bih.biHeight :
-			bih.biSizeImage;
-	int palSize = (1 << bih.biBitCount)*sizeof(RGBQUAD);
-	int binfoSize = sizeof(BITMAPINFO) + (bih.biBitCount == 8 || bih.biBitCount == 4?
-			((1 << bih.biBitCount) - 1)*sizeof(RGBQUAD) : 0);
-	BITMAPINFO* binfo = (BITMAPINFO*) getUIAllocator()->malloc(binfoSize);
+	// Everything below comes from the file, so it is untrusted and must be
+	// validated before it is used to size an allocation. Previously the header
+	// was taken at face value: `1 << biBitCount` is undefined for the entirely
+	// legal biBitCount of 32, the row-stride product overflowed a 32-bit int
+	// for large dimensions (yielding a negative size passed to malloc and
+	// istream::read), and neither allocation was checked for failure.
+	switch (bih.biBitCount) {
+		case 1: case 4: case 8: case 16: case 24: case 32: break;
+		default: return NULL;
+	}
+	if (bih.biWidth <= 0 || bih.biHeight == 0)
+		return NULL;
 
-	if (bih.biBitCount == 8 || bih.biBitCount == 4) {
-		if (!input.read((char*)&binfo->bmiColors[0],palSize)) {
+	const unsigned long long width  = (unsigned long long) bih.biWidth;
+	// A negative height is legal and means a top-down image.
+	const unsigned long long height = (unsigned long long)
+			(bih.biHeight < 0 ? -(long long) bih.biHeight : (long long) bih.biHeight);
+	const unsigned long long bits   = (unsigned long long) bih.biBitCount;
+
+	// Rows are padded to a 4-byte boundary. Computed in 64 bits so it cannot wrap.
+	const unsigned long long stride    = ((width * bits + 31ull) / 32ull) * 4ull;
+	const unsigned long long imageSize = bih.biCompression == BI_RGB
+			? stride * height
+			: (unsigned long long) bih.biSizeImage;
+
+	if (imageSize == 0 || imageSize > MAX_BITMAP_BYTES)
+		return NULL;
+
+	// A palette exists only for the indexed formats, so the entry count is at
+	// most 256 and the shift can no longer be undefined.
+	const bool hasPalette = (bih.biBitCount == 8 || bih.biBitCount == 4);
+	const size_t palEntries = hasPalette ? ((size_t) 1u << bih.biBitCount) : 0u;
+	const size_t palSize    = palEntries * sizeof(RGBQUAD);
+	// BITMAPINFO already carries one RGBQUAD, hence the -1.
+	const size_t binfoSize  = sizeof(BITMAPINFO)
+			+ (hasPalette ? (palEntries - 1) * sizeof(RGBQUAD) : 0u);
+
+	BITMAPINFO* binfo = (BITMAPINFO*) getUIAllocator()->malloc(binfoSize);
+	if (binfo == NULL)
+		return NULL;
+
+	if (hasPalette) {
+		if (!input.read((char*)&binfo->bmiColors[0],(std::streamsize) palSize)) {
 			getUIAllocator()->free(binfo,binfoSize);
 			return NULL;
 		}
 	}
 
+	const size_t dwBmpSize = (size_t) imageSize;
 	char* buf = (char*) getUIAllocator()->malloc(dwBmpSize);
+	if (buf == NULL) {
+		getUIAllocator()->free(binfo,binfoSize);
+		return NULL;
+	}
 
-	if (!input.read(buf,dwBmpSize)) {
+	if (!input.read(buf,(std::streamsize) dwBmpSize)) {
 		getUIAllocator()->free(binfo,binfoSize);
 		getUIAllocator()->free(buf,dwBmpSize);
 		return NULL;

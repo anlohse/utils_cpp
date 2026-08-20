@@ -12,7 +12,7 @@
 #include <utils/ui/cursor.hpp>
 #include <utils/ui/icon.hpp>
 #include <utils/ui/ui_allocator.hpp>
-#include <utils/containers/simple_list.hpp>
+#include <list>
 
 #if defined(UTILS_WINDOWS)
 #include <windows.h>
@@ -24,7 +24,9 @@ namespace utils {
 
 namespace ui {
 
-class EventListener;
+// struct, matching the definition in event.hpp -- declaring it as `class` here
+// made every translation unit that saw both spellings warn.
+struct EventListener;
 class Event;
 class UIController;
 class Container;
@@ -47,7 +49,10 @@ struct component_data {
 
 class Component : public UIObject {
 public:
-	typedef containers::fwdlist<EventListener*, ui_allocator<EventListener*> > listener_list;
+	// std::list rather than std::forward_list: the container list needs
+	// push_back, and keeping both list types the same keeps the iteration
+	// idiom uniform across the UI.
+	typedef std::list<EventListener*, ui_allocator<EventListener*> > listener_list;
 	typedef listener_list::const_iterator listener_iterator;
 private:
 	friend class UIController;

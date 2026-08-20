@@ -8,8 +8,9 @@
 #include <utils/ui/event.hpp>
 #include <utils/ui/component.hpp>
 #include <utils/ui/container.hpp>
-#include <utils/containers/hash_map.hpp>
 #include <typeinfo>
+#include <string>
+#include <unordered_map>
 
 namespace utils {
 
@@ -18,7 +19,10 @@ namespace ui {
 static UIController ui_component_controller;
 
 const char* Component::getClassName() const {
-	return typeid(this).name();
+	// typeid(*this), not typeid(this): the latter is the type of the POINTER,
+	// resolved statically, so every subclass returned the same name and the
+	// whole hierarchy collapsed onto a single shared UIController.
+	return typeid(*this).name();
 }
 
 UIController* Component::getUIController() {
@@ -167,8 +171,8 @@ Component::listener_iterator Component::getCommandListeners() {
 }
 
 void Component::callListeners(listener_list& list, Event* event) {
-	listener_list::iterator it = list.begin();
-	for (; it; ++it) {
+	// Standard iterators have no conversion to bool; compare against end().
+	for (listener_list::iterator it = list.begin(); it != list.end(); ++it) {
 		(*it)->operator ()(event);
 	}
 }
@@ -267,21 +271,29 @@ bool UIController::defaultPaint(Component* component) {
 	return false;
 }
 
-typedef containers::hashmap<std::string, UIController*> uicontroller_map_type;
+typedef std::unordered_map<std::string, UIController*> uicontroller_map_type;
 
-static uicontroller_map_type uicontroller_map;
+// A function-local static, for the same reason as the UI allocator: a
+// namespace-scope map is dynamically initialised and could be read by another
+// translation unit's static initialiser before its constructor had run.
+static uicontroller_map_type& uicontroller_map() {
+	static uicontroller_map_type map;
+	return map;
+}
 
 UIController* UIController::getUIController(Component* component) {
-	uicontroller_map_type::iterator it = uicontroller_map.find(component->getClassName());
-	if (it != uicontroller_map.end())
+	uicontroller_map_type& map = uicontroller_map();
+	uicontroller_map_type::iterator it = map.find(component->getClassName());
+	if (it != map.end())
 		return it->second;
 	return NULL;
 }
 bool UIController::registerUIController(UIController* controller, const char* className) {
-	uicontroller_map_type::iterator it = uicontroller_map.find(className);
-	if (it != uicontroller_map.end())
+	uicontroller_map_type& map = uicontroller_map();
+	uicontroller_map_type::iterator it = map.find(className);
+	if (it != map.end())
 		return false;
-	uicontroller_map.insert(uicontroller_map_type::value_type(className,controller));
+	map.insert(uicontroller_map_type::value_type(className,controller));
 	return true;
 }
 

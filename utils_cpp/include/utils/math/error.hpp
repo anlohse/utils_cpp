@@ -248,7 +248,9 @@ template <typename _Float>
 inline std::ostream& operator<<(std::ostream& os, const errored_number<_Float>& v) {
 	char buf[32];
 	buf[0] = 0;
-	os << ::gcvt(v.value, 7, buf) << " ± " ;
+	// "\xB1" is the plus-minus sign, written as an escape so this file stays
+	// pure ASCII and its meaning does not depend on the source encoding.
+	os << ::gcvt(v.value, 7, buf) << " \xB1 " ;
 	buf[0] = 0;
 	os << ::gcvt(v.error, 7, buf);
 	return os;

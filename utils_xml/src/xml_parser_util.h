@@ -80,7 +80,8 @@ template <typename _CharT, class _Alloc>
 class string_builder {
 public:
 	typedef _CharT char_type;
-	typedef typename _Alloc::template rebind<char_type>::other allocator_type;
+	// std::allocator<T>::rebind was removed in C++20.
+	typedef typename std::allocator_traits<_Alloc>::template rebind_alloc<char_type> allocator_type;
 	typedef size_t size_type;
 private:
 	char_type* _M_begin;
@@ -187,13 +188,16 @@ struct xml_defs {
 	static int strncmp(const char_type* s1, const char_type* s2, size_t n) {
 		return ::strncmp(s1,s2,n);
 	}
+	/** @return true when s1 ends with s2. */
 	static bool endswith(const char_type* s1, const char_type* s2) {
 		size_t ls1 = ::strlen(s1);
 		size_t ls2 = ::strlen(s2);
-		if (ls1 > ls2)
-			return ::strcmp(s1 + ls1 - ls2, s2) == 0;
-		else
-			return ::strcmp(s2 + ls2 - ls1, s1) == 0;
+		// A shorter string cannot end with a longer one. The old else-branch
+		// asked the reverse question -- whether s1 was a suffix of s2 -- so
+		// endswith(">", "/>") was true and every open tag looked self-closing.
+		if (ls1 < ls2)
+			return false;
+		return ::strcmp(s1 + ls1 - ls2, s2) == 0;
 	}
 	static bool is_tag(const char_type* str) {
 		return std::regex_match (str, IS_TAG) || std::regex_match (str, CLOSE_TAG);
@@ -205,15 +209,18 @@ struct xml_defs {
 	static bool default_entities(const char_type* name, string_builder<char_type,std::allocator<char_type>> &result) {
 		const char_type* value = NULL;
 		char_type buf[2]= {0,0};
-		if (strcmp(name,"amp"))
+		// strcmp returns 0 on equality: these tests were inverted, so every
+		// entity resolved to the value of the first name it did NOT match
+		// (&amp; decoded to ">").
+		if (strcmp(name,"amp") == 0)
 			value = "&";
-		else if (strcmp(name,"gt"))
+		else if (strcmp(name,"gt") == 0)
 			value = ">";
-		else if (strcmp(name,"lt"))
+		else if (strcmp(name,"lt") == 0)
 			value = "<";
-		else if (strcmp(name,"quot"))
+		else if (strcmp(name,"quot") == 0)
 			value = "\"";
-		else if (strcmp(name,"apos"))
+		else if (strcmp(name,"apos") == 0)
 			value = "'";
 		else if (std::regex_match(name, name+strlen(name),ENT_NUM)) {
 			char_type* endp;
@@ -269,13 +276,16 @@ struct xml_defs {
 		const char_type* send = str + strlen(str);
 		while (str < send) {
 			std::cmatch match;
-			std::regex_search(str, send, match, ATTRS);
-			if (match.size() != 0) {
-			    found_proc(remove_colon(match[1]), match[2], parse_characters(match[3].str().c_str(), _handler));
-				str = str + match[0].str().length();
-			} else {
+			if (!std::regex_search(str, send, match, ATTRS))
 				return false;
-			}
+			found_proc(remove_colon(match[1]), match[2], parse_characters(match[3].str().c_str(), _handler));
+			// Advance to the end of the match, not by its length: regex_search
+			// may match at an offset. Guard against a zero-width match, which
+			// would otherwise spin here forever.
+			const char_type* next = match[0].second;
+			if (next <= str)
+				return false;
+			str = next;
 		}
 		return true;
 	}
@@ -319,13 +329,13 @@ struct xml_defs<wchar_t> {
 	static int strncmp(const wchar_t* s1, const wchar_t* s2, size_t n) {
 		return ::wcsncmp(s1,s2,n);
 	}
+	/** @return true when s1 ends with s2. See the char specialisation. */
 	static bool endswith(const char_type* s1, const char_type* s2) {
-		size_t ls1 = wcslen(s1);
-		size_t ls2 = wcslen(s2);
-		if (ls1 > ls2)
-			return ::wcscmp(s1 + ls1 - ls2, s2) == 0;
-		else
-			return ::wcscmp(s2 + ls2 - ls1, s1) == 0;
+		size_t ls1 = ::wcslen(s1);
+		size_t ls2 = ::wcslen(s2);
+		if (ls1 < ls2)
+			return false;
+		return ::wcscmp(s1 + ls1 - ls2, s2) == 0;
 	}
 	static bool is_ident(char_type ch) {
 		return (ch >= L'A' && ch <= L'Z') || (ch >= L'a' && ch <= L'z') || (ch >= L'0' && ch <= L'9')
@@ -337,15 +347,16 @@ struct xml_defs<wchar_t> {
 	static bool default_entities(const char_type* name, string_builder<char_type,std::allocator<char_type>> &result) {
 		const char_type* value = NULL;
 		char_type buf[2]= {0,0};
-		if (strcmp(name,L"amp"))
+		// See the char specialisation: these comparisons were inverted.
+		if (strcmp(name,L"amp") == 0)
 			value = L"&";
-		else if (strcmp(name,L"gt"))
+		else if (strcmp(name,L"gt") == 0)
 			value = L">";
-		else if (strcmp(name,L"lt"))
+		else if (strcmp(name,L"lt") == 0)
 			value = L"<";
-		else if (strcmp(name,L"quot"))
+		else if (strcmp(name,L"quot") == 0)
 			value = L"\"";
-		else if (strcmp(name,L"apos"))
+		else if (strcmp(name,L"apos") == 0)
 			value = L"'";
 		else if (std::regex_match(name, name+strlen(name),ENT_NUMW)) {
 			char_type* endp;
@@ -401,13 +412,14 @@ struct xml_defs<wchar_t> {
 		const char_type* send = str + strlen(str);
 		while (str < send) {
 			std::wcmatch match;
-			std::regex_search(str, send, match, ATTRSW);
-			if (match.size() != 0) {
-			    found_proc(remove_colon(match[1]), match[2], parse_characters(match[3].str().c_str(), _handler));
-				str = str + match[0].str().length();
-			} else {
+			if (!std::regex_search(str, send, match, ATTRSW))
 				return false;
-			}
+			found_proc(remove_colon(match[1]), match[2], parse_characters(match[3].str().c_str(), _handler));
+			// See the char specialisation.
+			const char_type* next = match[0].second;
+			if (next <= str)
+				return false;
+			str = next;
 		}
 		return true;
 	}

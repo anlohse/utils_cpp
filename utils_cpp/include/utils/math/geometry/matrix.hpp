@@ -12,7 +12,6 @@
 #include <utils/math/geometry/vectors.hpp>
 #include <utils/math/geometry/matrix_utl.hpp>
 #include <utils/funcs.hpp>
-#include <utils/containers/iterators.hpp>
 #include <utils/math/math_exception.hpp>
 #include <type_traits>
 #include <cstdarg>

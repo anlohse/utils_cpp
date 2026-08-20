@@ -20,7 +20,11 @@ namespace net {
 
 class socket_iostream : public std::basic_iostream<char> {
 protected:
-	DEFAULT_ALLOCATOR<sock_streambuf> streambuf_allocator;
+	typedef DEFAULT_ALLOCATOR<sock_streambuf> streambuf_allocator_type;
+	// allocator::destroy was removed in C++20.
+	typedef std::allocator_traits<streambuf_allocator_type> streambuf_alloc_traits;
+
+	streambuf_allocator_type streambuf_allocator;
 	sock_streambuf* get_streambuf() const {
 		return dynamic_cast<sock_streambuf*>(rdbuf());
 	}
@@ -33,7 +37,7 @@ public:
 
 	virtual ~socket_iostream() {
 		if (rdbuf() && get_streambuf()->rem_ref() <= 0) {
-			streambuf_allocator.destroy((sock_streambuf*)rdbuf());
+			streambuf_alloc_traits::destroy(streambuf_allocator, (sock_streambuf*)rdbuf());
 			streambuf_allocator.deallocate((sock_streambuf*)rdbuf(),1);
 		}
 	}
@@ -43,7 +47,7 @@ public:
 
 	socket_iostream& operator = (const socket_iostream &rhs) {
 		if (rdbuf() && get_streambuf()->rem_ref() <= 0) {
-			streambuf_allocator.destroy((sock_streambuf*)rdbuf());
+			streambuf_alloc_traits::destroy(streambuf_allocator, (sock_streambuf*)rdbuf());
 			streambuf_allocator.deallocate((sock_streambuf*)rdbuf(),1);
 		}
 		streambuf_allocator = rhs.streambuf_allocator;

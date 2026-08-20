@@ -9,8 +9,12 @@
 #define UTILS_H_
 
 #include <string>
+#include <algorithm>
 #include <cstring>
+#include <cwchar>
 #include <locale>
+#include <iterator>
+#include <utility>
 
 namespace utils {
 
@@ -39,7 +43,7 @@ inline int compare_it(_Iterator s1, _Iterator s2, size_t length) {
 		if (*s1 > *s2)
 			return 1;
 		if (*s1 < *s2)
-			return 1;
+			return -1;
 	}
 	return 0;
 }
@@ -72,21 +76,28 @@ inline iterator_T binary_search(iterator_T _begin, iterator_T _end, const _Tp& _
 	iterator_T _first = _begin;
 	iterator_T _last = _end;
 	while (_first < _last) {
-	    int _midp = (_last - _first) / 2;
+	    // Half the *remaining* range. Using a difference_type rather than int
+	    // keeps this correct for ranges longer than INT_MAX.
+	    typename std::iterator_traits<iterator_T>::difference_type _midp = (_last - _first) / 2;
 	    iterator_T _midi =  _first + _midp;
 	    int cmp = compare(*_midi,_vl);
 	    if (cmp < 0)
 	    	_first = _midi + 1;
 	    else if (cmp > 0)
-	    	_last = _midi - 1;
+	    	// _midi, not _midi - 1: the element at _midi is already known to be
+	    	// greater, and excluding it as well can skip past the insertion point.
+	    	_last = _midi;
 	    else
 	    	return _midi;
 	}
 	return _first;
 }
 
+// std::binary_function / std::unary_function were deprecated in C++11 and
+// removed in C++17. They only ever supplied typedefs that nothing here reads,
+// so the base classes are simply gone.
 template <typename T>
-struct equal_to_nocase : public std::binary_function<T, T, bool> {
+struct equal_to_nocase {
 	bool operator () (T v1, T v2) const {
 		std::locale loc;
 		for (; *v1 != 0 && *v2 != 0;) {
@@ -123,8 +134,28 @@ struct equal_to_nocase<const std::string&> {
 };
 
 
+/**
+ * A case-insensitive hash consistent with equal_to_nocase.
+ *
+ * Any unordered container pairing equal_to_nocase with a case-sensitive hash is
+ * broken: keys that compare equal land in different buckets, so lookups miss
+ * whenever the case differs from the stored key. HTTP headers are exactly that
+ * situation.
+ */
+struct hash_nocase {
+	typedef std::string argument_type;
+	typedef size_t result_type;
+	size_t operator () (const std::string& s) const {
+		std::locale loc;
+		size_t h = 0;
+		for (std::string::const_iterator it = s.begin(); it != s.end(); ++it)
+			h = h * 131 + static_cast<unsigned char>(std::toupper<char>(*it, loc));
+		return h;
+	}
+};
+
 template <typename T>
-struct compare_func: public std::binary_function<T, T, int> {
+struct compare_func {
 	int operator () (T v1, T v2) const {
 		return v1-v2;
 	}
@@ -187,7 +218,7 @@ struct compare_func<const long double> {
 };
 
 template <typename T>
-struct hash : public std::unary_function<T, int>{
+struct hash {
 	int operator () (T v) const {
 		return 0;
 	}
@@ -293,15 +324,24 @@ inline unsigned long next_base2(unsigned long vl) {
 	return r;
 }
 
-#define MAX(a,b) (a > b ? a : b)
-#define MIN(a,b) (a < b ? a : b)
+// MAX/MIN were function-like macros with unparenthesised arguments, so they
+// mis-parsed any expression containing an operator of lower precedence and
+// evaluated their arguments twice -- MAX(i++, n) incremented i twice. They also
+// collided with the identically-named macros in <windows.h>. Use std::max and
+// std::min from <algorithm>, which do neither.
 
+/**
+ * A do-nothing mutex for single-threaded instantiations of the containers.
+ *
+ * try_lock returns bool so that null_mutex models the standard Lockable
+ * concept and can be used with std::lock_guard / std::unique_lock.
+ */
 struct null_mutex {
 	typedef void* native_handle_type;
-	void lock(){}
-	void try_lock(){}
-	void unlock(){}
-	native_handle_type native_handle() { return NULL; }
+	void lock() noexcept {}
+	bool try_lock() noexcept { return true; }
+	void unlock() noexcept {}
+	native_handle_type native_handle() noexcept { return nullptr; }
 };
 
 template <typename _Type, class _Predicate>

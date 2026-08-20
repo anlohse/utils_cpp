@@ -9,6 +9,7 @@
 #define INCLUDE_UTILS_MATH_FUZZY_FBOOL_HPP_
 
 #include <utils/utils_defs.hpp>
+#include <algorithm>
 #include <utils/funcs.hpp>
 
 namespace utils {
@@ -35,19 +36,19 @@ public:
 	}
 
 	fbool operator && (const fbool& other) const {
-		return fbool(MIN(_state,other._state));
+		return fbool(std::min(_state, other._state));
 	}
 
 	fbool operator && (float_type other) const {
-		return fbool(MIN(_state,other));
+		return fbool(std::min(_state, other));
 	}
 
 	fbool operator || (const fbool& other) const {
-		return fbool(MAX(_state,other._state));
+		return fbool(std::max(_state, other._state));
 	}
 
 	fbool operator || (float_type other) const {
-		return fbool(MAX(_state,other));
+		return fbool(std::max(_state, other));
 	}
 
 	fbool operator ! () const {

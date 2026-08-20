@@ -99,7 +99,12 @@ bool read_tag(string_builder<_CharT,std::allocator<_CharT>> &builder,
 	bool in_xml = false;
 	int tags_count = 0;
 	while(is) {
-		_CharT ch = (_CharT) is.get();
+		// get() returns int_type; casting straight to _CharT turns EOF into
+		// 0xFF and appends it to the builder before the loop notices.
+		typename std::basic_istream<_CharT>::int_type c = is.get();
+		if (c == std::char_traits<_CharT>::eof())
+			break;
+		_CharT ch = static_cast<_CharT>(c);
 		builder.push(ch);
 		if (in_tag) {
 			if (ch == *(xml_defs<_CharT>::text(XC_GT))) {
@@ -175,11 +180,17 @@ void parse_xml(std::basic_istream<_CharT>& is, tag_handler<_CharT>* _handler) {
 	string_builder<_CharT,std::allocator<_CharT>> builder;
 	_handler->start_document();
 	while(is) {
-		_CharT ch = (_CharT) is.get();
+		typename std::basic_istream<_CharT>::int_type c = is.get();
+		if (c == std::char_traits<_CharT>::eof())
+			break;
+		_CharT ch = static_cast<_CharT>(c);
 		if (ch == *(xml_defs<_CharT>::text(XC_LT))) {
 			if (builder.length() != 0) {
 				std::basic_string<_CharT> chars = xml_defs<_CharT>::parse_characters(builder.c_str(), _handler);
-				_handler->characters(&(*chars.begin()), &(*chars.cend()));
+				// data(), not &(*begin()) / &(*cend()): dereferencing a string's
+				// end iterator is undefined, and MSVC's debug iterators trap it
+				// with a modal assertion -- which is what hung this test.
+				_handler->characters(chars.data(), chars.data() + chars.size());
 			}
 			builder.clear();
 			builder.push(ch);

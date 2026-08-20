@@ -20,8 +20,8 @@ Container::Container(int left, int top, int width, int height) :
 }
 
 Container::~Container() {
-	component_list::iterator it = _children.begin();
-	for (; it; ++it) {
+	// Standard iterators have no conversion to bool; compare against end().
+	for (component_list::iterator it = _children.begin(); it != _children.end(); ++it) {
 		delete it->child;
 	}
 	SAFE_DELETE(_layout);
@@ -54,6 +54,9 @@ void Container::removeChild(Component* child) {
 }
 Container::component_iterator Container::children() const {
 	return _children.cbegin();
+}
+Container::component_iterator Container::children_end() const {
+	return _children.cend();
 }
 void Container::setLayout(Layout* layout) {
 	_layout = layout;
@@ -100,8 +103,8 @@ void ContainerUIController::paint(Component* component, Graphics* graphics) {
 //--------------------------------------------------------------------------------------------------------------------------
 
 bool Layout::checkConstraints(const Container* container, const Component* child, int constraint) {
-	Container::component_iterator it = container->children();
-	for (; it; ++it) {
+	Container::component_iterator end = container->children_end();
+	for (Container::component_iterator it = container->children(); it != end; ++it) {
 		if (it->constraint == constraint)
 			return false;
 	}
@@ -114,8 +117,8 @@ void BasicLayout::apply(Container* container) {
 
 Size BasicLayout::getMinimumSize(const Container* container) const {
 	int width = 0, height = 0, tb = 0, lr = 0;
-	Container::component_iterator it = container->children();
-	for (; it; ++it) {
+	Container::component_iterator end = container->children_end();
+	for (Container::component_iterator it = container->children(); it != end; ++it) {
 		Size msz = it->child->getMinimumSize();
 		switch (it->constraint) {
 		case BasicLayout::TOP:
