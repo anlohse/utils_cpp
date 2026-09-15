@@ -11,6 +11,7 @@
 #include <utils/ui/graphics.hpp>
 #include <utils/ui/ui_allocator.hpp>
 #include <utils/ui/image.hpp>
+#include <utils/ui/ref.hpp>
 
 namespace utils {
 
@@ -43,8 +44,8 @@ private:
 	bool system;
 	int xHotspot;
 	int yHotspot;
-	Image* imgMask;
-	Image* imgColor;
+	Ref<Image> imgMask;
+	Ref<Image> imgColor;
 protected:
 	Cursor();
 	Cursor(void* _data);

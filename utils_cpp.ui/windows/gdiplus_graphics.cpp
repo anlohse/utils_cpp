@@ -95,8 +95,8 @@ GdiPlusGraphics::GdiPlusGraphics(HDC _hdc, bool _ownsDC) :
 		lineColor(Color::BLACK),
 		fillColor(Color::BLACK),
 		textColor(Color::BLACK),
-		currentFillStyle(NULL),
-		currentStroke(NULL),
+		currentFillStyle(),
+		currentStroke(),
 		currentFont(NULL),
 		globalCompositeOperation(CompositeOperation::SOURCE_COPY),
 		alpha(1.0f),
@@ -111,8 +111,7 @@ GdiPlusGraphics::GdiPlusGraphics(HDC _hdc, bool _ownsDC) :
 }
 
 GdiPlusGraphics::~GdiPlusGraphics() {
-	SAFE_DELETE(currentFillStyle);
-	SAFE_DELETE(currentStroke);
+	// currentFillStyle and currentStroke release themselves.
 	delete path;
 	delete g;
 	if (ownsDC && hdc != NULL)
@@ -138,16 +137,16 @@ Gdiplus::Color GdiPlusGraphics::toGdiPlus(const utils::ui::Color& c) const {
 }
 
 Gdiplus::Brush* GdiPlusGraphics::makeFillBrush() const {
-	if (currentFillStyle != NULL) {
+	if (currentFillStyle) {
 		if (currentFillStyle->isGradient()) {
-			const GdiPlusGradient* grad = dynamic_cast<const GdiPlusGradient*>(currentFillStyle);
+			const GdiPlusGradient* grad = dynamic_cast<const GdiPlusGradient*>(currentFillStyle.get());
 			if (grad != NULL)
 				return grad->makeBrush(alpha);
 		} else {
-			const GdiPlusPattern* pat = dynamic_cast<const GdiPlusPattern*>(currentFillStyle);
+			const GdiPlusPattern* pat = dynamic_cast<const GdiPlusPattern*>(currentFillStyle.get());
 			if (pat != NULL)
 				return pat->makeBrush();
-			const ColorBrush* cb = dynamic_cast<const ColorBrush*>(currentFillStyle);
+			const ColorBrush* cb = dynamic_cast<const ColorBrush*>(currentFillStyle.get());
 			if (cb != NULL)
 				return new SolidBrush(toGdiPlus(cb->getColor()));
 		}
@@ -158,11 +157,11 @@ Gdiplus::Brush* GdiPlusGraphics::makeFillBrush() const {
 Gdiplus::Pen* GdiPlusGraphics::makeStrokePen() const {
 	float width = 1.0f;
 	Pen* pen;
-	if (currentStroke != NULL)
+	if (currentStroke)
 		width = currentStroke->getWidth();
 	if (width <= 0.0f) width = 1.0f;
 	pen = new Pen(toGdiPlus(lineColor), width);
-	if (currentStroke != NULL) {
+	if (currentStroke) {
 		pen->SetLineJoin(toGdiPlusJoin(currentStroke->getJoin()));
 		pen->SetStartCap(toGdiPlusCap(currentStroke->getCap()));
 		pen->SetEndCap(toGdiPlusCap(currentStroke->getCap()));
@@ -183,16 +182,9 @@ void GdiPlusGraphics::save() {
 	s.lineColor      = lineColor;
 	s.fillColor      = fillColor;
 	s.textColor      = textColor;
-	// The saved style pointers carry a reference of their own. Without it an
-	// intervening setFillStyle() would release the last reference and delete
-	// the object the stack still points at, and restore() would hand back a
-	// dangling pointer.
+	// Copying the Ref takes the reference that keeps the stacked style alive.
 	s.fillStyle      = currentFillStyle;
-	if (s.fillStyle != NULL) s.fillStyle->add_reference();
 	s.stroke         = currentStroke;
-	if (s.stroke != NULL) s.stroke->add_reference();
-	// The font is borrowed, not owned: fonts come from Font::createFont and
-	// are released with Font::destroyFont by whoever created them.
 	s.font           = currentFont;
 	s.alpha          = alpha;
 	s.antialias      = antialias;
@@ -210,10 +202,6 @@ void GdiPlusGraphics::restore() {
 	lineColor                = s.lineColor;
 	fillColor                = s.fillColor;
 	textColor                = s.textColor;
-	// Drop what is current, then adopt the reference save() took. When both
-	// name the same object the count simply drops back to one.
-	SAFE_DELETE(currentFillStyle);
-	SAFE_DELETE(currentStroke);
 	currentFillStyle         = s.fillStyle;
 	currentStroke            = s.stroke;
 	currentFont              = s.font;
@@ -304,23 +292,15 @@ void GdiPlusGraphics::setTextColor(const utils::ui::Color& value) { textColor = 
 FillStyle* GdiPlusGraphics::getFillStyle() { return currentFillStyle; }
 
 void GdiPlusGraphics::setFillStyle(FillStyle* value) {
-	// Reference-counted, matching the GDI backend. The two implementations
-	// share one interface, so they must agree on who owns what a create*()
-	// call returned -- otherwise the same caller code leaks against one
-	// backend and double-frees against the other.
-	SAFE_DELETE(currentFillStyle);
+	// Assigning the Ref retains the new style and releases the old one, in
+	// that order, so passing back the style already held is harmless.
 	currentFillStyle = value;
-	if (value != NULL)
-		value->add_reference();
 }
 
 Stroke* GdiPlusGraphics::getStroke() { return currentStroke; }
 
 void GdiPlusGraphics::setStroke(Stroke* value) {
-	SAFE_DELETE(currentStroke);
 	currentStroke = value;
-	if (value != NULL)
-		value->add_reference();
 }
 
 // rects ---------------------------------------------------------------------

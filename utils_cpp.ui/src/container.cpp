@@ -20,11 +20,11 @@ Container::Container(int left, int top, int width, int height) :
 }
 
 Container::~Container() {
-	// Standard iterators have no conversion to bool; compare against end().
-	for (component_list::iterator it = _children.begin(); it != _children.end(); ++it) {
-		delete it->child;
-	}
-	SAFE_DELETE(_layout);
+	// Clearing the list releases each child's reference, destroying any child
+	// this container was the last owner of. The old loop called delete on the
+	// raw pointer regardless of how many other references existed.
+	_children.clear();
+	// _layout releases itself.
 }
 
 static ContainerUIController containerUIController;
@@ -41,7 +41,7 @@ bool Container::addChild(Component* child, int constraint) {
 	if (_layout)
 		if (!_layout->checkConstraints(this,child, constraint))
 			return false;
-	child->add_reference();
+	// container_child takes the reference.
 	_children.push_back(container_child(child,constraint));
 	child->setParent(this);
 	return true;
@@ -59,6 +59,8 @@ Container::component_iterator Container::children_end() const {
 	return _children.cend();
 }
 void Container::setLayout(Layout* layout) {
+	// Takes ownership: setLayout(new BasicLayout(...)) is the usual call, and
+	// the previous layout is released here.
 	_layout = layout;
 }
 Layout* Container::getLayout() const {
@@ -209,7 +211,7 @@ void BasicLayout::apply(Container* container) {
 	// actually changes -- a child that already had the right size would
 	// otherwise never arrange its own children.
 	for (Container::component_iterator it = container->children(); it != end; ++it) {
-		Container* nested = dynamic_cast<Container*>(it->child);
+		Container* nested = dynamic_cast<Container*>(it->child.get());
 		if (nested != NULL)
 			nested->layout();
 	}

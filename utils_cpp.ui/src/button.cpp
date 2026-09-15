@@ -13,16 +13,14 @@ namespace utils {
 namespace ui {
 
 Button::Button(Container* parent, int left, int top, int width, int height, int idCommand) :
-			Component(), _image(NULL), _disabled_image(NULL), _pressed_image(NULL) {
+			Component(), _image(), _disabled_image(), _pressed_image() {
 	createButton(parent,left,top,width,height);
 	setId(idCommand);
 }
 
 Button::~Button() {
-	// All three images are reference-counted, not just the first.
-	if (_image && _image->rem_reference()->get_references() < 1) delete _image;
-	if (_disabled_image && _disabled_image->rem_reference()->get_references() < 1) delete _disabled_image;
-	if (_pressed_image && _pressed_image->rem_reference()->get_references() < 1) delete _pressed_image;
+	// The three Ref members release themselves. Two of them used to be left
+	// uninitialised entirely, so defaultPaint read indeterminate pointers.
 }
 
 Image* Button::getImage() const {
@@ -35,25 +33,23 @@ Image* Button::getPressedImage() const {
 	return _pressed_image;
 }
 
+// The setters return the previous image. They hand back a raw pointer for
+// source compatibility, and keep a reference on it alive for the caller by
+// detaching rather than releasing -- so the returned object is still valid
+// and the caller now owns that reference.
 Image* Button::setImage(Image* img) {
-	Image* old = _image;
-	if (img) img->add_reference();
+	Image* old = _image.detach();
 	_image = img;
-	if (old) old->rem_reference();
 	return old;
 }
 Image* Button::setDisabledImage(Image* img) {
-	Image* old = _disabled_image;
-	if (img) img->add_reference();
+	Image* old = _disabled_image.detach();
 	_disabled_image = img;
-	if (old) old->rem_reference();
 	return old;
 }
 Image* Button::setPressedImage(Image* img) {
-	Image* old = _pressed_image;
-	if (img) img->add_reference();
+	Image* old = _pressed_image.detach();
 	_pressed_image = img;
-	if (old) old->rem_reference();
 	return old;
 }
 
@@ -79,9 +75,10 @@ bool ButtonUIController::eraseBackground(Component* component, Graphics* graphic
 
 bool ButtonUIController::defaultPaint(Component* component) {
 	Button* btn = dynamic_cast<Button*>(component);
-	return btn->_image == NULL &&
-			btn->_disabled_image == NULL &&
-			btn->_pressed_image == NULL;
+	if (btn == NULL)
+		return true;
+	// No images means the native control can paint itself.
+	return !btn->_image && !btn->_disabled_image && !btn->_pressed_image;
 //	return true;
 }
 
