@@ -38,8 +38,13 @@ if(MSVC)
     target_compile_definitions(utils_compile_options INTERFACE
         WIN32_LEAN_AND_MEAN
         NOMINMAX            # windows.h min/max macros collide with std::min/max
-        UNICODE _UNICODE
     )
+    # NOT UNICODE/_UNICODE. The Win32 backend calls the ANSI entry points
+    # explicitly (CreateWindowExA, RegisterClassExA, TextOutA), so defining
+    # UNICODE only flips the *unsuffixed* calls to their W variants and mixes
+    # the two. The practical result was DefWindowProcW being handed an ANSI
+    # window: it fails WM_NCCREATE, CreateWindowExA returns NULL with
+    # GetLastError() == 0, and no window is ever created.
 
     if(UTILS_WERROR)
         target_compile_options(utils_compile_options INTERFACE /WX)

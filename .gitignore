@@ -41,3 +41,8 @@ build/*
 .cproject
 .project
 /utils_xml/build
+
+# Reference renders written by the UI graphics test
+gdi.bmp
+gdiplus.bmp
+gdiplus_noaa.bmp

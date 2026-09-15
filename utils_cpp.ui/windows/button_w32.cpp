@@ -28,11 +28,13 @@ void Button::createButton(Container* parent, int left, int top, int width, int h
 	setBackground(new GdiColorBrush((HBRUSH)(COLOR_BTNFACE+1), false));
 }
 
-Button::Button(Container* parent) :	Component(), _image(NULL) {
+Button::Button(Container* parent) :
+		Component(), _image(NULL), _disabled_image(NULL), _pressed_image(NULL) {
 	createButton(parent,CW_USEDEFAULT,CW_USEDEFAULT,CW_USEDEFAULT,CW_USEDEFAULT);
 }
 
-Button::Button() : Component(), _image(NULL) {
+Button::Button() :
+		Component(), _image(NULL), _disabled_image(NULL), _pressed_image(NULL) {
 	createButton(NULL,CW_USEDEFAULT,CW_USEDEFAULT,CW_USEDEFAULT,CW_USEDEFAULT);
 }
 
@@ -42,10 +44,39 @@ void Button::click() {
 }
 
 void ButtonUIController::paint(Component* component, Graphics* graphics) {
-	GdiGraphics* g = dynamic_cast<GdiGraphics*>(graphics);
-	RECT rc = {0,0,component->getSize().width,component->getSize().height};
-	DrawFrameControl(g->hdc, &rc, DFC_BUTTON, DFCS_BUTTONPUSH);
-	g->drawImage(dynamic_cast<Button*>(component)->_image,0,0);
+	if (component == NULL || graphics == NULL)
+		return;
+	const Size sz = component->getSize();
+	const float w = (float) sz.width;
+	const float h = (float) sz.height;
+
+	// DrawFrameControl needs an HDC, which only the GDI backend can supply.
+	// This used to dynamic_cast straight to GdiGraphics and dereference the
+	// result -- fine while GDI was the only implementation, a null dereference
+	// the moment any other backend was selected. Use it when it is available
+	// and fall back to drawing the bevel through the Graphics interface.
+	GdiGraphics* gdi = dynamic_cast<GdiGraphics*>(graphics);
+	if (gdi != NULL && gdi->hdc != NULL) {
+		RECT rc = {0, 0, sz.width, sz.height};
+		DrawFrameControl(gdi->hdc, &rc, DFC_BUTTON, DFCS_BUTTONPUSH);
+	} else {
+		graphics->setFillColor(Color(0xf0, 0xf0, 0xf0));
+		graphics->fillRect(0, 0, w, h);
+		// A two-tone bevel: light along the top and left, dark elsewhere.
+		const bool wasAA = graphics->getAntialias();
+		graphics->setAntialias(false);
+		graphics->setFillColor(Color(0xff, 0xff, 0xff));
+		graphics->fillRect(0, 0, w, 1);
+		graphics->fillRect(0, 0, 1, h);
+		graphics->setFillColor(Color(0x70, 0x70, 0x70));
+		graphics->fillRect(0, h - 1, w, 1);
+		graphics->fillRect(w - 1, 0, 1, h);
+		graphics->setAntialias(wasAA);
+	}
+
+	Button* btn = dynamic_cast<Button*>(component);
+	if (btn != NULL && btn->_image != NULL)
+		graphics->drawImage(btn->_image, 0, 0);
 }
 
 } // ui

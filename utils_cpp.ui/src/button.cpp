@@ -13,13 +13,16 @@ namespace utils {
 namespace ui {
 
 Button::Button(Container* parent, int left, int top, int width, int height, int idCommand) :
-			Component(), _image(NULL) {
+			Component(), _image(NULL), _disabled_image(NULL), _pressed_image(NULL) {
 	createButton(parent,left,top,width,height);
 	setId(idCommand);
 }
 
 Button::~Button() {
+	// All three images are reference-counted, not just the first.
 	if (_image && _image->rem_reference()->get_references() < 1) delete _image;
+	if (_disabled_image && _disabled_image->rem_reference()->get_references() < 1) delete _disabled_image;
+	if (_pressed_image && _pressed_image->rem_reference()->get_references() < 1) delete _pressed_image;
 }
 
 Image* Button::getImage() const {

@@ -10,6 +10,9 @@
 #include <utils/ui/image.hpp>
 #include "gdi_graphics.h"
 #include <windows.h>
+#include <cmath>
+
+static const float GDI_PI_F = 3.14159265358979323846f;
 
 namespace utils {
 
@@ -76,7 +79,8 @@ GdiGraphics::GdiGraphics(HDC _hdc, bool _compatible) :
 		currentStroke(NULL),
 		globalCompositeOperation(CompositeOperation::SOURCE_COPY),
 		alpha(1),
-		pathOpen(false)
+		pathOpen(false),
+		imageSmoothing(false)
 		{
 	SetGraphicsMode(hdc,GM_ADVANCED);
 	currentFont = GdiFont::fromHDC(hdc);
@@ -87,6 +91,9 @@ GdiGraphics::GdiGraphics(HDC _hdc, bool _compatible) :
 }
 
 GdiGraphics::~GdiGraphics() {
+	// Release everything this Graphics holds a reference to.
+	SAFE_DELETE(currentPattern);
+	SAFE_DELETE(currentStroke);
 	if (compatible && get_references() < 1) {
 		DeleteDC(hdc);
 	}
@@ -168,6 +175,34 @@ void GdiGraphics::setGlobalCompositeOperation(const CompositeOperation& go) {
 		globalCompositeOperation = go;
 }
 
+bool GdiGraphics::getAntialias() {
+	// Always false, whatever was requested. GDI has no coverage-based
+	// rasteriser: LineTo, Polygon and Ellipse produce hard edges and there is
+	// no mode that changes that. Reporting the requested value instead would
+	// promise smoothing this backend cannot deliver -- select the GDI+
+	// implementation (Graphics::setGraphicsImplementation) for antialiasing.
+	return false;
+}
+
+void GdiGraphics::setAntialias(bool value) {
+	// Deliberately ignored; see getAntialias().
+	(void) value;
+}
+
+bool GdiGraphics::getImageSmoothing() {
+	return imageSmoothing;
+}
+
+void GdiGraphics::setImageSmoothing(bool value) {
+	// Image scaling is the one place GDI can interpolate: HALFTONE averages
+	// source pixels, COLORONCOLOR drops them. This is Canvas's
+	// imageSmoothingEnabled and is unrelated to path antialiasing.
+	imageSmoothing = value;
+	::SetStretchBltMode(hdc, value ? HALFTONE : COLORONCOLOR);
+	if (value)
+		::SetBrushOrgEx(hdc, 0, 0, NULL);   // required after HALFTONE
+}
+
 Color GdiGraphics::getLineColor() {
 	return lineColor;
 }
@@ -180,8 +215,8 @@ Color GdiGraphics::getFillColor() {
 	return fillColor;
 }
 void GdiGraphics::setFillColor(const Color& value) {
-//	if (SetDCBrushColor(hdc,value.get_rgb()) != CLR_INVALID)
-	SAFE_DELETE(currentPattern);
+	// setFillStyle releases the previous pattern; releasing it here as well
+	// dropped the reference twice and left currentPattern dangling.
 	setFillStyle(new GdiColorBrush(value));
 	fillColor = value;
 }
@@ -200,14 +235,21 @@ FillStyle* GdiGraphics::getFillStyle() {
 void GdiGraphics::setFillStyle(FillStyle* value) {
 	SAFE_DELETE(currentPattern);
 	currentPattern = value;
-	value->add_reference();
+	if (value != NULL)
+		value->add_reference();
 }
 
 Stroke* GdiGraphics::getStroke() {
 	return currentStroke;
 }
 void GdiGraphics::setStroke(Stroke* value) {
+	// Takes a reference, like setFillStyle. createStroke() hands back a fresh
+	// object with a zero count and no other owner, so without this every
+	// g->setStroke(g->createStroke(...)) in a paint handler leaked a Stroke.
+	SAFE_DELETE(currentStroke);
 	currentStroke = value;
+	if (value != NULL)
+		value->add_reference();
 }
 
 
@@ -216,28 +258,31 @@ void GdiGraphics::clearRect(float x, float y, float w, float h) {
 	// TODO not implemented on GDI. But its possible.
 }
 void GdiGraphics::fillRect(float x, float y, float w, float h) {
-	if (currentPattern) {
-		if (currentPattern->isGradient()) {
-			// TODO fill with gradient
-		} else {
-			RECT rc = {x,y,x+w,y+h};
-			FillRect(hdc,&rc,(HBRUSH)dynamic_cast<GdiObject*>(currentPattern)->getHandle());
+	RECT rc = { (LONG) x, (LONG) y, (LONG) (x + w), (LONG) (y + h) };
+	if (currentPattern != NULL && !currentPattern->isGradient()) {
+		GdiObject* obj = dynamic_cast<GdiObject*>(currentPattern);
+		if (obj != NULL && obj->getHandle() != NULL) {
+			FillRect(hdc, &rc, (HBRUSH) obj->getHandle());
+			return;
 		}
+	}
+	// Gradients have no GDI brush (see createLinearGradient), and there may be
+	// no pattern at all. Either way fall back to the flat fill colour rather
+	// than painting nothing, which is what this did before.
+	HBRUSH brush = CreateSolidBrush(fillColor.get_rgb());
+	if (brush != NULL) {
+		FillRect(hdc, &rc, brush);
+		DeleteObject(brush);
 	}
 }
 void GdiGraphics::strokeRect(float x, float y, float w, float h) {
 	HBRUSH hbrNull = (HBRUSH) GetStockObject(NULL_BRUSH);
 	HBRUSH hbrPrev = (HBRUSH) SelectObject(hdc, hbrNull);
-	HPEN oldPen = NULL;
-	if (currentStroke) {
-		HPEN pen = static_cast<GdiStroke*>(currentStroke)->hpen;
-		oldPen = (HPEN) SelectObject(hdc, pen);
-//		SetDCPenColor(hdc,lineColor.get_rgb());
-	}
-	Rectangle(hdc, x, y, x + w, y + h);
-	if (oldPen) {
-		 SelectObject(hdc, oldPen);
-	}
+	HPEN pen = createCurrentPen();
+	HGDIOBJ oldPen = SelectObject(hdc, pen);
+	Rectangle(hdc, (int) x, (int) y, (int) (x + w), (int) (y + h));
+	SelectObject(hdc, oldPen);
+	DeleteObject(pen);
 	SelectObject(hdc, hbrPrev);
 }
 
@@ -253,25 +298,63 @@ void GdiGraphics::closePath() {
 		pathOpen = false;
 	}
 }
+HPEN GdiGraphics::createCurrentPen() {
+	// The pen has to be rebuilt per stroke rather than reused from the Stroke
+	// object: Canvas treats the line colour and the line geometry as separate
+	// state, so setLineColor after createStroke must take effect. GdiStroke
+	// bakes the colour into its HPEN at construction, which is why changing
+	// the colour appeared to do nothing.
+	DWORD penStyle = PS_GEOMETRIC | PS_SOLID | PS_JOIN_MITER | PS_ENDCAP_ROUND;
+	float w = 1.0f;
+	GdiStroke* strk = dynamic_cast<GdiStroke*>(currentStroke);
+	if (strk != NULL) {
+		penStyle = strk->style;
+		w = strk->width;
+	}
+	LOGBRUSH lb;
+	lb.lbColor = RGB(lineColor.get_red(), lineColor.get_green(), lineColor.get_blue());
+	lb.lbHatch = 0;
+	lb.lbStyle = BS_SOLID;
+	return ExtCreatePen(penStyle, (DWORD) (w < 1.0f ? 1.0f : w), &lb, 0, NULL);
+}
+
+/** Selects the brush for the current fill; returns the previous one. */
+HGDIOBJ GdiGraphics::selectFillBrush(HBRUSH* owned) {
+	*owned = NULL;
+	if (currentPattern != NULL && !currentPattern->isGradient()) {
+		GdiObject* obj = dynamic_cast<GdiObject*>(currentPattern);
+		if (obj != NULL && obj->getHandle() != NULL)
+			return SelectObject(hdc, obj->getHandle());
+	}
+	*owned = CreateSolidBrush(RGB(fillColor.get_red(), fillColor.get_green(), fillColor.get_blue()));
+	return SelectObject(hdc, *owned);
+}
+
 void GdiGraphics::fill() {
 	if (pathOpen) {
 		EndPath(hdc);
 		pathOpen = false;
 	}
+	// FillPath paints with the brush selected into the DC. Nothing ever
+	// selected one, so every fill() used the stock white brush and vanished
+	// against a white background.
+	HBRUSH owned = NULL;
+	HGDIOBJ oldBrush = selectFillBrush(&owned);
 	FillPath(hdc);
+	SelectObject(hdc, oldBrush);
+	if (owned != NULL)
+		DeleteObject(owned);
 }
 void GdiGraphics::stroke() {
 	if (pathOpen) {
 		EndPath(hdc);
 		pathOpen = false;
 	}
-	GdiStroke* strk = dynamic_cast<GdiStroke*>(currentStroke);
-	HGDIOBJ old = SelectObject(hdc, strk->hpen);
-//	SelectObject(hdc, GetStockObject(DC_PEN));
-//	SetDCBrushColor(hdc,lineColor.get_rgb());
-//	SetDCPenColor(hdc,RGB(255,0,0));
+	HPEN pen = createCurrentPen();
+	HGDIOBJ old = SelectObject(hdc, pen);
 	StrokePath(hdc);
 	SelectObject(hdc, old);
+	DeleteObject(pen);
 }
 void GdiGraphics::strokeAndFill() {
 	if (pathOpen) {
@@ -319,8 +402,23 @@ void GdiGraphics::arcTo(float x1, float y1, float x2, float y2, float radius) {
 void GdiGraphics::rect(float x, float y, float w, float h) {
 	Rectangle(hdc, x, y, x + w, y + h);
 }
-void GdiGraphics::arc(float x, float y, float radius, float startAngle, float endAngle, bool anticlockwise = false) {
-	AngleArc(hdc, x, y, radius, startAngle, (anticlockwise ? 1 : -1)*(endAngle - startAngle));
+void GdiGraphics::arc(float x, float y, float radius, float startAngle, float endAngle, bool anticlockwise) {
+	// Canvas gives radians measured clockwise in a y-down space. AngleArc
+	// takes degrees measured counter-clockwise, so both the scale and the
+	// sign have to change. Passing the radians through unconverted turned a
+	// full circle into a six-degree sliver.
+	const float TWO_PI = 2.0f * GDI_PI_F;
+	float sweep = endAngle - startAngle;
+	if (!anticlockwise) {
+		if (sweep >= TWO_PI) sweep = TWO_PI;
+		else while (sweep < 0.0f) sweep += TWO_PI;
+	} else {
+		if (sweep <= -TWO_PI) sweep = -TWO_PI;
+		else while (sweep > 0.0f) sweep -= TWO_PI;
+	}
+	const float startDeg = -startAngle * 180.0f / GDI_PI_F;
+	const float sweepDeg = -sweep * 180.0f / GDI_PI_F;
+	AngleArc(hdc, (int) x, (int) y, (DWORD) (radius < 0.0f ? 0.0f : radius), startDeg, sweepDeg);
 }
 
 
@@ -331,7 +429,8 @@ void GdiGraphics::setFont(Font* font) {
 	GdiFont* old = currentFont;
 	currentFont = dynamic_cast<GdiFont*>(font);
 	if (currentFont) {
-		if (old->rem_reference()->get_references() < 1) delete old;
+		// old may be null: the constructor's GdiFont::fromHDC can fail.
+		if (old != NULL && old->rem_reference()->get_references() < 1) delete old;
 		currentFont->add_reference();
 		SelectObject(hdc,currentFont->hfont);
 	} else {

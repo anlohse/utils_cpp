@@ -53,6 +53,28 @@ public:
 	virtual CompositeOperation getGlobalCompositeOperation() = 0;
 	virtual void setGlobalCompositeOperation(const CompositeOperation& go) = 0;
 
+	// rendering quality
+	//
+	// Canvas 2D always antialiases geometry and offers no way to switch it
+	// off. A native widget toolkit does need that switch -- a 1px border or
+	// separator has to land on exact pixels rather than smear across two --
+	// so antialiasing here is opt-in per Graphics, and is part of the save()
+	// / restore() state like every other drawing attribute.
+	//
+	// Image smoothing is a separate knob, matching Canvas's
+	// imageSmoothingEnabled: it controls the filter used when drawImage
+	// scales, and is independent of whether path edges are antialiased.
+	//
+	// Not every backend can honour setAntialias(true). GDI has no
+	// coverage-based rasteriser at all, so its implementation reports false
+	// however it is set; check getAntialias() after setting it when the
+	// distinction matters to the caller.
+	virtual bool getAntialias() = 0;
+	virtual void setAntialias(bool value) = 0;
+
+	virtual bool getImageSmoothing() = 0;
+	virtual void setImageSmoothing(bool value) = 0;
+
 	virtual Color getLineColor() = 0;
 	virtual void setLineColor(const Color& value) = 0;
 
