@@ -18,6 +18,7 @@
 
 #include <utils/ui/graphics.hpp>
 #include <utils/ui/ui_allocator.hpp>
+#include <utils/ui/ref.hpp>
 #include <windows.h>
 // gdiplus.h uses IStream and PROPID, which WIN32_LEAN_AND_MEAN keeps out of
 // windows.h. They have to be declared before gdiplus.h is parsed.
@@ -59,8 +60,12 @@ struct GdiPlusState {
 	Color lineColor;
 	Color fillColor;
 	Color textColor;
-	FillStyle* fillStyle = nullptr;
-	Stroke* stroke = nullptr;
+	// Ref, not a raw pointer: the stacked style has to keep the object alive,
+	// or an intervening setFillStyle() frees what restore() would hand back.
+	Ref<FillStyle> fillStyle;
+	Ref<Stroke> stroke;
+	// The font is borrowed: fonts come from Font::createFont and are released
+	// with Font::destroyFont by whoever created them.
 	Font* font = nullptr;
 	float alpha = 1.0f;
 	bool antialias = true;
@@ -89,8 +94,8 @@ private:
 	GdiPlusStateStack stateStack;
 
 	Color lineColor, fillColor, textColor;
-	FillStyle* currentFillStyle;
-	Stroke* currentStroke;
+	Ref<FillStyle> currentFillStyle;
+	Ref<Stroke> currentStroke;
 	Font* currentFont;
 	CompositeOperation globalCompositeOperation;
 	float alpha;

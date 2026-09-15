@@ -140,7 +140,11 @@ ctest --preset msvc --output-on-failure
 ```
 
 Three suites: the core library (19 test cases, 66 test methods), the XML
-parser, and the UI suite. The UI suite covers two things:
+parser, and the UI suite. The UI suite covers three things:
+
+- `Ref<T>` itself -- retain/release, copy, move, self-assignment, assigning an
+  alias of the same object, replacement, two handles over one raw pointer,
+  detach, and converting construction.
 
 - a graphics-backend comparison that renders one reference scene through GDI
   and GDI+ and asserts that only GDI+ produces partial-coverage edge pixels —
@@ -188,14 +192,13 @@ them being 32 bits was silently wrong off Windows.
   no GDI+ equivalent and is approximated with a `PathGradientBrush`. Both want
   Direct2D. Also absent: `ellipse`, `setLineDash`, `miterLimit`, shadows,
   `isPointInPath`, `textAlign`/`textBaseline`.
-- **Reference counting in the UI is manual and not RAII.** Ownership rests on
-  `add_reference`/`rem_reference` plus the `SAFE_DELETE` macro, with no smart
-  pointer anywhere. It is internally consistent now -- `Graphics` owns the
-  strokes and fill styles handed back by its `create*` methods and releases
-  them on replacement, on `restore()` and on destruction -- but the invariant
-  is upheld by hand at every call site, and one missed `add_reference` is a
-  use-after-free rather than a compile error. A `Ref<T>` handle wrapping the
-  existing counter would remove most of the risk without changing the model.
+- **Ownership is now RAII**, via `Ref<T>` in `utils/ui/ref.hpp` -- an owning
+  handle over the intrusive count that `UIObject` already carried. Every
+  owning member in the UI holds one, `SAFE_DELETE` is gone, and the two
+  remaining hand-written reference calls are in `Image::deleteImage`, which
+  is a release-one-reference API by design. The count being intrusive means
+  two handles over the same raw pointer are safe, which `shared_ptr` could
+  not offer here.
 - **`Component` background painting is unreliable.** The default background is
   a `GdiColorBrush` wrapping `(HBRUSH)(COLOR_BTNFACE+1)`, which is a system
   colour constant valid only in `WNDCLASS.hbrBackground`, not a real brush

@@ -16,15 +16,18 @@ namespace utils {
 namespace ui {
 
 struct container_child {
-	Component* child;
+	// Ref, so a container owns its children through the same reference count
+	// everything else uses. The destructor previously called delete on the
+	// raw pointer, ignoring the count addChild had incremented.
+	Ref<Component> child;
 	int constraint;
 	container_child(Component* _child, int _constr) : child(_child), constraint(_constr) { }
 	container_child() : child(), constraint() { }
 	operator Component*() const {
-		return child;
+		return child.get();
 	}
 	bool operator == (const container_child& other) const {
-		return child == other.child;
+		return child.get() == other.child.get();
 	}
 };
 
@@ -35,7 +38,7 @@ public:
 private:
 	friend class ContainerUIController;
 	component_list _children;
-	Layout*  _layout;
+	Ref<Layout> _layout;
 protected:
 	virtual UIController* getDefaultUIController() const;
 

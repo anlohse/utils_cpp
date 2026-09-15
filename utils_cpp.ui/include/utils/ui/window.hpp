@@ -36,8 +36,8 @@ private:
 	bool _modal;
 	bool _notopen;
 	CloseAction _defCloseAction;
-	Icon* _icon;
-	Icon* _smallIcon;
+	Ref<Icon> _icon;
+	Ref<Icon> _smallIcon;
 	listener_list _window_listeners;
 	listener_list _command_listeners;
 protected:

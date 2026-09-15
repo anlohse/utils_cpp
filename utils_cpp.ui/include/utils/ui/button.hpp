@@ -11,6 +11,7 @@
 #include <utils/ui/container.hpp>
 #include <utils/ui/event.hpp>
 #include <utils/ui/image.hpp>
+#include <utils/ui/ref.hpp>
 
 namespace utils {
 
@@ -20,9 +21,9 @@ namespace ui {
 class Button : public Component {
 private:
 	friend class ButtonUIController;
-	Image* _image;
-	Image* _disabled_image;
-	Image* _pressed_image;
+	Ref<Image> _image;
+	Ref<Image> _disabled_image;
+	Ref<Image> _pressed_image;
 protected:
 	virtual const char* getClassName() const;
 	virtual UIController* getDefaultUIController() const;

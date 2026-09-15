@@ -28,8 +28,7 @@ Window::Window(): _modal(false),_notopen(true), _defCloseAction(CloseAction::DO_
 
 }
 Window::~Window() {
-	SAFE_DELETE(_icon);
-	SAFE_DELETE(_smallIcon);
+	// _icon and _smallIcon release themselves.
 }
 
 UIController* Window::getDefaultUIController() const {
