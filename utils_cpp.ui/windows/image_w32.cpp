@@ -148,14 +148,13 @@ ImageType Image_W32::getBitsPerPixel() const {
 }
 
 Graphics* Image_W32::getGraphics() {
-	if (graphics_impl == GRAPHICS_GDI) {
-		if (hdc == NULL) {
-			hdc = CreateCompatibleDC(NULL);
-			SelectObject(hdc,hBitmap);
-		}
-		return GdiGraphics::createGraphics(hdc,true);
+	if (hdc == NULL) {
+		hdc = CreateCompatibleDC(NULL);
+		SelectObject(hdc,hBitmap);
 	}
-	return NULL;
+	// ownsDC is false: the DC belongs to this Image and outlives any single
+	// Graphics handed out for it.
+	return createBackendGraphics(hdc, false);
 }
 
 void Image_W32::readBits(void* bits, int left, int top, int right, int bottom, int scanWidth) const {

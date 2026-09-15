@@ -43,6 +43,7 @@ if(WIN32)
     target_link_libraries(utils_ui PRIVATE
         user32      # windows, messages, cursors
         gdi32       # the GDI drawing backend
+        gdiplus     # the antialiasing drawing backend
         comctl32    # common controls
         shell32
     )
@@ -71,5 +72,10 @@ if(UTILS_BUILD_TESTS)
         # A console main(), not WinMain: the demo prints diagnostics to stdout.
         add_executable(utils_ui_tests ${UTILS_UI_TEST_SOURCES})
         target_link_libraries(utils_ui_tests PRIVATE utils::ui)
+        # The backend comparison test drives createBackendGraphics directly,
+        # which is deliberately internal to the Win32 backend.
+        target_include_directories(utils_ui_tests PRIVATE
+            $<$<BOOL:${WIN32}>:${CMAKE_CURRENT_SOURCE_DIR}/windows>)
+        add_test(NAME utils_ui_graphics COMMAND utils_ui_tests)
     endif()
 endif()

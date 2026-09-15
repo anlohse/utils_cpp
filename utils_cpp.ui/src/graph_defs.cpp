@@ -150,18 +150,7 @@ INIT_CONSTANT(LineCap,FLAT,LineCap(3));
 using namespace utils;
 using namespace ui;
 
-void test_graphics() {
-	CompositeOperation co = CompositeOperation::SOURCE_COPY;
-	float hsb[3];
-	Color::rgb_to_hsv(253,128,191,hsb);
-	std::cout << hsb[0] << "," << hsb[1] << "," << hsb[2] << std::endl;
-	Color c = Color::hsv_to_rgb(hsb[0],hsb[1],hsb[2]);
-	std::cout << c << std::endl;
-	c = Color::parse_color("rgb(23 ,45, 99) ");
-	std::cout << c << std::endl;
-	c = Color::parse_color("rgba(23 ,45, 99,234) ");
-	std::cout << c << std::endl;
-	c = Color::parse_color("#88445566");
-	std::cout << c << std::endl;
-}
+// A scratch test_graphics() lived here: global scope, no callers, printing to
+// stdout from inside a UI library. Its colour-conversion checks now live in
+// utils_cpp.ui/test_src/test_graphics.cpp as an actual test.
 

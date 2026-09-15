@@ -9,6 +9,7 @@
 #include <utils/ui/event.hpp>
 #include <utils/time.hpp>
 #include <winuser.h>
+#include <cstdio>
 #include "gdi_graphics.h"
 #include "utils_w32.h"
 

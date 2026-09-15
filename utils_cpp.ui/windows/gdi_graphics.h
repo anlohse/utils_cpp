@@ -34,7 +34,10 @@ public:
 	CompositeOperation globalCompositeOperation;
 	float alpha;
 	bool pathOpen;
+	bool imageSmoothing;
 	void commit_world_matrix();
+	HPEN createCurrentPen();
+	HGDIOBJ selectFillBrush(HBRUSH* owned);
 public:
 	GdiGraphics(HDC _hdc, bool _compatible);
 	virtual ~GdiGraphics();
@@ -60,6 +63,12 @@ public:
 
 	virtual CompositeOperation getGlobalCompositeOperation();
 	virtual void setGlobalCompositeOperation(const CompositeOperation& go);
+
+	virtual bool getAntialias();
+	virtual void setAntialias(bool value);
+
+	virtual bool getImageSmoothing();
+	virtual void setImageSmoothing(bool value);
 
 	virtual Color getLineColor();
 	virtual void setLineColor(const Color& value);

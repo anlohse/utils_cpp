@@ -116,7 +116,13 @@ inline bool operator!=(const ui_allocator<_Tp>&,
 	return false;
 }
 
-#define SAFE_DELETE(x) { if (x && x->rem_reference()->get_references() < 1) delete x;}
+// Releases one reference and destroys the object when the last one goes,
+// then clears the pointer.
+//
+// Clearing matters: without it the caller is left holding a dangling pointer,
+// and a second SAFE_DELETE on the same variable -- which happened whenever
+// GdiGraphics::setFillColor ran twice -- dereferences freed memory.
+#define SAFE_DELETE(x) { if ((x) && (x)->rem_reference()->get_references() < 1) delete (x); (x) = NULL; }
 
 
 } // ui

@@ -11,9 +11,11 @@
 #include <utils/ui/window.hpp>
 #include <utils/time.hpp>
 #include "gdi_graphics.h"
+#include "int_datat.h"
 #include "utils_w32.h"
 #include <utils/exception.hpp>
 #include <iostream>
+#include <cstdio>
 #include <set>
 #include <commctrl.h>
 
@@ -76,19 +78,23 @@ LRESULT CALLBACK Component::componentWindowProc(
 		} else {
 			PAINTSTRUCT ps;
 			BeginPaint(hwnd,&ps);
-			if (Graphics::getGraphicsImplementation() == GRAPHICS_GDI) {
-				GdiGraphics grap(ps.hdc,false);
-				PaintEvent evt(comp,Time::milliseconds(),ComponentEvent::PAINT, &grap);
+			Graphics* grap = createBackendGraphics(ps.hdc, false);
+			if (grap != NULL) {
+				PaintEvent evt(comp,Time::milliseconds(),ComponentEvent::PAINT, grap);
 				comp->getUIController()->handleEvent(comp,&evt);
+				destroyBackendGraphics(grap);
 			}
 			EndPaint(hwnd,&ps);
 			consumed = true;
 		}
 		break;
 		case WM_ERASEBKGND: {
-			GdiGraphics gra((HDC)wParam,false);
-			PaintEvent evt(comp,Time::milliseconds(),ComponentEvent::ERASE_BACKGROUND, &gra);
-			consumed = comp->getUIController()->handleEvent(comp,&evt);
+			Graphics* gra = createBackendGraphics((HDC)wParam, false);
+			if (gra != NULL) {
+				PaintEvent evt(comp,Time::milliseconds(),ComponentEvent::ERASE_BACKGROUND, gra);
+				consumed = comp->getUIController()->handleEvent(comp,&evt);
+				destroyBackendGraphics(gra);
+			}
 		}
 		return 1;
 		// -------------------------------------- Mouse Events --------------------------------------------------
@@ -381,9 +387,28 @@ void Component::setSize(int width, int height) {
 	SetWindowPos(internal_data.hWnd,(HWND)0,0,0,width,height,SWP_NOMOVE|SWP_NOZORDER|SWP_NOACTIVATE);
 }
 Size Component::getSize() const {
+	// The CLIENT area, not the window rect. This is the space a container can
+	// lay children into and the area paint() draws over -- eraseBackground
+	// already assumes it by filling from (0,0). GetWindowRect included the
+	// title bar and borders, so both overshot on any framed window.
 	RECT rc;
-	GetWindowRect(internal_data.hWnd,&rc);
+	GetClientRect(internal_data.hWnd,&rc);
 	return Size(rc.right-rc.left,rc.bottom-rc.top);
+}
+
+/**
+ * The window rectangle in the coordinate space setPosition/setRect expect:
+ * the parent's client area, or the screen for a top-level window.
+ *
+ * GetWindowRect alone reports screen coordinates, so getPosition() and
+ * setPosition() disagreed for every child window and geometry did not round
+ * trip.
+ */
+static void getRectInParentSpace(HWND hWnd, RECT* out) {
+	::GetWindowRect(hWnd, out);
+	HWND parent = ::GetParent(hWnd);
+	if (parent != NULL)
+		::MapWindowPoints(HWND_DESKTOP, parent, reinterpret_cast<POINT*>(out), 2);
 }
 
 void Component::setPosition(int left, int top) {
@@ -391,17 +416,21 @@ void Component::setPosition(int left, int top) {
 }
 Point Component::getPosition() const {
 	RECT rc;
-	GetWindowRect(internal_data.hWnd,&rc);
+	getRectInParentSpace(internal_data.hWnd,&rc);
 	return Point(rc.left,rc.top);
 }
 
 void Component::setRect(const Rect& rect) {
-	SetWindowPos(internal_data.hWnd,(HWND)0,rect.left, rect.top,rect.right-rect.left+1,rect.bottom-rect.top+1,SWP_NOZORDER|SWP_NOACTIVATE);
+	// right/bottom are exclusive, matching getRect() and Win32 RECT. The
+	// previous +1 meant setRect(getRect()) grew the window by a pixel each
+	// time it was applied.
+	SetWindowPos(internal_data.hWnd,(HWND)0,rect.left, rect.top,
+			rect.right-rect.left,rect.bottom-rect.top,SWP_NOZORDER|SWP_NOACTIVATE);
 }
 Rect Component::getRect() const {
-	Rect rc;
-	GetWindowRect(internal_data.hWnd,reinterpret_cast<RECT*>(&rc));
-	return rc;
+	RECT rc;
+	getRectInParentSpace(internal_data.hWnd,&rc);
+	return Rect(rc.left,rc.top,rc.right,rc.bottom);
 }
 
 void Component::setEnabled(bool enabled) {
@@ -563,10 +592,8 @@ Font* Component::getFont() const {
 
 Graphics* Component::getGraphics() {
 	if (_graphics == NULL) {
-		if (Graphics::getGraphicsImplementation() == GRAPHICS_GDI) {
-			internal_data.hdc = GetDC(internal_data.hWnd);
-			_graphics = GdiGraphics::createGraphics(internal_data.hdc, false);
-		}
+		internal_data.hdc = GetDC(internal_data.hWnd);
+		_graphics = createBackendGraphics(internal_data.hdc, false);
 	}
 	return _graphics;
 }
