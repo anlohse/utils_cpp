@@ -12,6 +12,7 @@
 #include <utils/ui/cursor.hpp>
 #include <utils/ui/icon.hpp>
 #include <utils/ui/ui_allocator.hpp>
+#include <utils/ui/ref.hpp>
 #include <list>
 
 #if defined(UTILS_WINDOWS)
@@ -60,9 +61,9 @@ private:
 	friend class Window;
 	component_data internal_data;
 	Container* _parent;
-	Cursor* _cursor;
-	Font* _font;
-	FillStyle* _background;
+	Ref<Cursor> _cursor;
+	Ref<Font> _font;
+	Ref<FillStyle> _background;
 	Graphics* _graphics;
 	UIController* _ui_controller;
 	t_qword _last_click_time;

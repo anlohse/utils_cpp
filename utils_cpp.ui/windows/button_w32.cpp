@@ -29,12 +29,12 @@ void Button::createButton(Container* parent, int left, int top, int width, int h
 }
 
 Button::Button(Container* parent) :
-		Component(), _image(NULL), _disabled_image(NULL), _pressed_image(NULL) {
+		Component(), _image(), _disabled_image(), _pressed_image() {
 	createButton(parent,CW_USEDEFAULT,CW_USEDEFAULT,CW_USEDEFAULT,CW_USEDEFAULT);
 }
 
 Button::Button() :
-		Component(), _image(NULL), _disabled_image(NULL), _pressed_image(NULL) {
+		Component(), _image(), _disabled_image(), _pressed_image() {
 	createButton(NULL,CW_USEDEFAULT,CW_USEDEFAULT,CW_USEDEFAULT,CW_USEDEFAULT);
 }
 
@@ -75,8 +75,8 @@ void ButtonUIController::paint(Component* component, Graphics* graphics) {
 	}
 
 	Button* btn = dynamic_cast<Button*>(component);
-	if (btn != NULL && btn->_image != NULL)
-		graphics->drawImage(btn->_image, 0, 0);
+	if (btn != NULL && btn->_image)
+		graphics->drawImage(btn->_image.get(), 0, 0);
 }
 
 } // ui

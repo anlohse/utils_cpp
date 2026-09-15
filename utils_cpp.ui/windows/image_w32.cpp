@@ -192,7 +192,9 @@ Image* Image::createImage(Image* image) {
 	return imagew32_allocator.allocate(Image_W32(image));
 }
 void Image::deleteImage(Image* image) {
-	SAFE_DELETE(image);
+	// Releases one reference and destroys the image if it was the last.
+	if (image != NULL && image->rem_reference()->get_references() < 1)
+		delete image;
 }
 
 static char BITMAP_MAGIC[] = "BM";

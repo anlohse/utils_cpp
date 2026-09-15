@@ -13,6 +13,7 @@
 #include <cstring>
 #include <iostream>
 
+int  test_ref();
 int  test_graphics_backends();
 int  test_layout();
 void test_ui();
@@ -26,6 +27,8 @@ int main(int argc, char** argv) {
 
 	int failures = 0;
 	try {
+		failures += test_ref();
+		std::cout << std::endl;
 		failures += test_graphics_backends();
 		std::cout << std::endl;
 		failures += test_layout();

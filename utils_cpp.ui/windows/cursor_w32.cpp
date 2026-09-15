@@ -30,8 +30,8 @@ void Cursor::load_cursor_properties() {
 void Cursor::load_cursor_images() {
 	 ICONINFO info = {0};
 	 if (::GetIconInfo((HCURSOR)internal_data, &info)!=0 ) {
-		 imgColor = (Image*)Image_W32::createImage(info.hbmColor,false)->add_reference();
-		 imgMask = (Image*)Image_W32::createImage(info.hbmMask,false)->add_reference();
+		 imgColor = Image_W32::createImage(info.hbmColor,false);
+		 imgMask = Image_W32::createImage(info.hbmMask,false);
 	 }
 }
 
@@ -76,7 +76,8 @@ Cursor* Cursor::createCursor(int _xHotspot, int _yHotspot, Image* _imgMask, Imag
 	iconinfo.hbmMask        = dynamic_cast<Image_W32*>(_imgMask)->hBitmap;
 	iconinfo.hbmColor       = dynamic_cast<Image_W32*>(_imgColor)->hBitmap;
 	HCURSOR hCursor = ::CreateIconIndirect(&iconinfo);
-	return new Cursor(hCursor,false,_xHotspot,_yHotspot,(Image*)_imgMask->add_reference(),(Image*)_imgColor->add_reference());
+	// The Cursor's Ref members take their own references.
+	return new Cursor(hCursor,false,_xHotspot,_yHotspot,_imgMask,_imgColor);
 }
 
 } // ui

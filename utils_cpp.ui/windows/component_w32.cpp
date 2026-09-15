@@ -338,16 +338,15 @@ Component::Component(Container* parent, int left, int top, int width, int height
 				_paint_listeners(),
 				_command_listeners() {
 
-	_cursor= Cursor::getSystemCursor(SystemCursor::ARROW);
-	_cursor->add_reference();
+	// Each assignment takes its own reference; the explicit add_reference
+	// calls that used to follow would have double-counted.
+	_cursor = Cursor::getSystemCursor(SystemCursor::ARROW);
 
 	if (!isClassRegistred(getClassName()))
 		registerClass(CS_PARENTDC | CS_VREDRAW | CS_HREDRAW, NULL, NULL, _cursor, NULL, &Component::componentWindowProc);
 
 	_font = GdiFont::createFontImpl("Sans Serif",Font::PLAIN,11);
-	_font->add_reference();
 	_background = new GdiColorBrush((HBRUSH)(COLOR_BTNFACE+1), false);
-	_background->add_reference();
 
 	createWindow(parent,0,"", (parent ? WS_CHILD : WS_POPUP) | WS_TABSTOP | WS_CLIPSIBLINGS | WS_CLIPCHILDREN,
 			left, top, width, height, NULL);
@@ -358,12 +357,8 @@ Component::Component(Container* parent, int left, int top, int width, int height
 
 }
 Component::~Component() {
-	if (_font && _font->rem_reference()->get_references() < 1)
-		Font::destroyFont(_font);
-	if (_cursor && _cursor->rem_reference()->get_references() < 1)
-		Cursor::deleteCursor(_cursor);
-	if (_background && _background->rem_reference()->get_references() < 1)
-		delete _background;
+	// _font, _cursor and _background release themselves. Font::destroyFont and
+	// Cursor::deleteCursor amounted to a virtual delete, which is what Ref does.
 	if (_graphics) {
 		delete _graphics;
 		if (Graphics::getGraphicsImplementation() == GRAPHICS_GDI) {
@@ -475,10 +470,8 @@ int Component::isTabOrder() const {
 }
 
 void Component::setCursor(Cursor* cursor) {
-	SAFE_DELETE(_cursor);
 	_cursor = cursor;
 	if (cursor) {
-		cursor->add_reference();
 		setClassPointer(internal_data.hWnd, GCLP_HCURSOR, (void*)cursor->internal_data);
 	} else {
 		setClassPointer(internal_data.hWnd, GCLP_HCURSOR, NULL);
@@ -505,10 +498,7 @@ void Component::invalidate(const Rect& rect) {
 }
 
 void Component::setBackground(FillStyle* color) {
-	SAFE_DELETE(_background);
 	_background = color;
-	if (_background)
-		_background->add_reference();
 	repaint();
 }
 FillStyle* Component::getBackground() const {
@@ -579,12 +569,15 @@ Container* Component::getParent() const {
 }
 
 void Component::setFont(Font* font) {
-	if (font) {
-		font->add_reference();
-		SAFE_DELETE(_font);
-		_font = font;
-		SendMessageA(internal_data.hWnd, WM_SETFONT, (WPARAM)((GdiFont*)_font)->getHandle(), 0);
-	}
+	if (font == NULL)
+		return;
+	_font = font;
+	// WM_SETFONT needs an HFONT, which only a GDI font has. This used to
+	// C-cast whatever it was given to GdiFont* and call getHandle() on it --
+	// undefined the moment the GDI+ backend supplied a GdiPlusFont.
+	GdiFont* gdiFont = dynamic_cast<GdiFont*>(_font.get());
+	if (gdiFont != NULL)
+		SendMessageA(internal_data.hWnd, WM_SETFONT, (WPARAM)gdiFont->getHandle(), 0);
 }
 Font* Component::getFont() const {
 	return _font;

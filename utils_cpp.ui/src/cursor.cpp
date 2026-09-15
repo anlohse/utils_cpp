@@ -69,10 +69,7 @@ Cursor::Cursor(int _xHotspot, int _yHotspot, Image* _imgMask, Image* _imgColor) 
 }
 
 Cursor::~Cursor() {
-	if (imgMask && imgMask->rem_reference()->get_references() < 1)
-		delete imgMask;
-	if (imgColor && imgColor->rem_reference()->get_references() < 1)
-		delete imgColor;
+	// imgMask and imgColor release themselves.
 	free_cursor_resource();
 }
 

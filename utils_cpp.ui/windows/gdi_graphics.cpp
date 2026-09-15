@@ -75,8 +75,8 @@ GdiGraphics::GdiGraphics(HDC _hdc, bool _compatible) :
 		world_matrix(WorldMatrix::identity()),
 		matrix_stack(1),
 		currentFont(NULL),
-		currentPattern(NULL),
-		currentStroke(NULL),
+		currentPattern(),
+		currentStroke(),
 		globalCompositeOperation(CompositeOperation::SOURCE_COPY),
 		alpha(1),
 		pathOpen(false),
@@ -91,9 +91,7 @@ GdiGraphics::GdiGraphics(HDC _hdc, bool _compatible) :
 }
 
 GdiGraphics::~GdiGraphics() {
-	// Release everything this Graphics holds a reference to.
-	SAFE_DELETE(currentPattern);
-	SAFE_DELETE(currentStroke);
+	// currentPattern and currentStroke release themselves.
 	if (compatible && get_references() < 1) {
 		DeleteDC(hdc);
 	}
@@ -233,23 +231,17 @@ FillStyle* GdiGraphics::getFillStyle() {
 	return currentPattern;
 }
 void GdiGraphics::setFillStyle(FillStyle* value) {
-	SAFE_DELETE(currentPattern);
 	currentPattern = value;
-	if (value != NULL)
-		value->add_reference();
 }
 
 Stroke* GdiGraphics::getStroke() {
 	return currentStroke;
 }
 void GdiGraphics::setStroke(Stroke* value) {
-	// Takes a reference, like setFillStyle. createStroke() hands back a fresh
-	// object with a zero count and no other owner, so without this every
-	// g->setStroke(g->createStroke(...)) in a paint handler leaked a Stroke.
-	SAFE_DELETE(currentStroke);
+	// Assigning the Ref retains the new stroke and releases the old one.
+	// createStroke() hands back a fresh object with no other owner, so
+	// without this g->setStroke(g->createStroke(...)) leaked on every paint.
 	currentStroke = value;
-	if (value != NULL)
-		value->add_reference();
 }
 
 
@@ -259,8 +251,8 @@ void GdiGraphics::clearRect(float x, float y, float w, float h) {
 }
 void GdiGraphics::fillRect(float x, float y, float w, float h) {
 	RECT rc = { (LONG) x, (LONG) y, (LONG) (x + w), (LONG) (y + h) };
-	if (currentPattern != NULL && !currentPattern->isGradient()) {
-		GdiObject* obj = dynamic_cast<GdiObject*>(currentPattern);
+	if (currentPattern && !currentPattern->isGradient()) {
+		GdiObject* obj = dynamic_cast<GdiObject*>(currentPattern.get());
 		if (obj != NULL && obj->getHandle() != NULL) {
 			FillRect(hdc, &rc, (HBRUSH) obj->getHandle());
 			return;
@@ -306,7 +298,7 @@ HPEN GdiGraphics::createCurrentPen() {
 	// the colour appeared to do nothing.
 	DWORD penStyle = PS_GEOMETRIC | PS_SOLID | PS_JOIN_MITER | PS_ENDCAP_ROUND;
 	float w = 1.0f;
-	GdiStroke* strk = dynamic_cast<GdiStroke*>(currentStroke);
+	GdiStroke* strk = dynamic_cast<GdiStroke*>(currentStroke.get());
 	if (strk != NULL) {
 		penStyle = strk->style;
 		w = strk->width;
@@ -321,8 +313,8 @@ HPEN GdiGraphics::createCurrentPen() {
 /** Selects the brush for the current fill; returns the previous one. */
 HGDIOBJ GdiGraphics::selectFillBrush(HBRUSH* owned) {
 	*owned = NULL;
-	if (currentPattern != NULL && !currentPattern->isGradient()) {
-		GdiObject* obj = dynamic_cast<GdiObject*>(currentPattern);
+	if (currentPattern && !currentPattern->isGradient()) {
+		GdiObject* obj = dynamic_cast<GdiObject*>(currentPattern.get());
 		if (obj != NULL && obj->getHandle() != NULL)
 			return SelectObject(hdc, obj->getHandle());
 	}
@@ -426,16 +418,13 @@ Font* GdiGraphics::getFont() {
 	return currentFont;
 }
 void GdiGraphics::setFont(Font* font) {
-	GdiFont* old = currentFont;
-	currentFont = dynamic_cast<GdiFont*>(font);
-	if (currentFont) {
-		// old may be null: the constructor's GdiFont::fromHDC can fail.
-		if (old != NULL && old->rem_reference()->get_references() < 1) delete old;
-		currentFont->add_reference();
-		SelectObject(hdc,currentFont->hfont);
-	} else {
-		currentFont = old;
-	}
+	// Only a GDI font can be selected into a DC; anything else leaves the
+	// current one in place rather than being silently mis-cast.
+	GdiFont* gdiFont = dynamic_cast<GdiFont*>(font);
+	if (gdiFont == NULL)
+		return;
+	currentFont = gdiFont;
+	SelectObject(hdc,gdiFont->hfont);
 }
 void GdiGraphics::fillText(const char* text, float x, float y, float maxWidth) {
 	BeginPath(hdc);

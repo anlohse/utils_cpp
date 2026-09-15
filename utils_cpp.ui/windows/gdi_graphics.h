@@ -9,6 +9,7 @@
 #define GDI_GRAPHICS_H_
 
 #include <utils/ui/graphics.hpp>
+#include <utils/ui/ref.hpp>
 #include <utils/math/geometry/matrix.hpp>
 #include <windows.h>
 #include <vector>
@@ -27,9 +28,11 @@ public:
 	bool compatible;
 	WorldMatrix world_matrix;
 	MatrixStack matrix_stack;
-	GdiFont* currentFont;
-	FillStyle* currentPattern;
-	Stroke* currentStroke;
+	// Ref<Font>, not Ref<GdiFont>: GdiFont is merely forward-declared here,
+	// and RefCounted cannot be checked against an incomplete type.
+	Ref<Font> currentFont;
+	Ref<FillStyle> currentPattern;
+	Ref<Stroke> currentStroke;
 	Color lineColor, fillColor, textColor;
 	CompositeOperation globalCompositeOperation;
 	float alpha;

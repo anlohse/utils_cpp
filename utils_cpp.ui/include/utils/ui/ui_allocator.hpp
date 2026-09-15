@@ -116,13 +116,12 @@ inline bool operator!=(const ui_allocator<_Tp>&,
 	return false;
 }
 
-// Releases one reference and destroys the object when the last one goes,
-// then clears the pointer.
-//
-// Clearing matters: without it the caller is left holding a dangling pointer,
-// and a second SAFE_DELETE on the same variable -- which happened whenever
-// GdiGraphics::setFillColor ran twice -- dereferences freed memory.
-#define SAFE_DELETE(x) { if ((x) && (x)->rem_reference()->get_references() < 1) delete (x); (x) = NULL; }
+// SAFE_DELETE lived here. It has no users left: every owning member in the UI
+// now holds a Ref<T> (utils/ui/ref.hpp), which releases on destruction and on
+// reassignment. The macro made ownership a convention upheld by hand at every
+// call site, and the bugs it produced -- a Stroke leaked on every paint, a
+// use-after-free on the second setFillColor, two backends disagreeing about
+// who owned a createStroke() result -- are exactly what a handle prevents.
 
 
 } // ui
